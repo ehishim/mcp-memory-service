@@ -1000,9 +1000,18 @@ class MemoryServer:
                                     "description": "Optional metadata about the memory, including tags and type.",
                                     "properties": {
                                         "tags": {
-                                            "type": "array",
-                                            "items": {"type": "string"},
-                                            "description": "Tags to categorize the memory as an array of strings. If you have a comma-separated string, convert it to an array before calling."
+                                            "oneOf": [
+                                                {
+                                                    "type": "array",
+                                                    "items": {"type": "string"},
+                                                    "description": "Tags as an array of strings"
+                                                },
+                                                {
+                                                    "type": "string",
+                                                    "description": "Tags as a comma-separated string"
+                                                }
+                                            ],
+                                            "description": "Tags to categorize the memory. Can be provided as an array of strings [\"tag1\", \"tag2\"] or a comma-separated string \"tag1,tag2\"."
                                         },
                                         "type": {
                                             "type": "string",
