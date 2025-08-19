@@ -111,7 +111,22 @@ async def mcp_endpoint(request: MCPRequest):
     try:
         storage = get_storage()
         
-        if request.method == "tools/list":
+        if request.method == "initialize":
+            return MCPResponse(
+                id=request.id,
+                result={
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {
+                        "tools": {}
+                    },
+                    "serverInfo": {
+                        "name": "mcp-memory-service",
+                        "version": "4.1.1"
+                    }
+                }
+            )
+
+        elif request.method == "tools/list":
             return MCPResponse(
                 id=request.id,
                 result={

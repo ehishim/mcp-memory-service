@@ -26,6 +26,7 @@ import sys
 import os
 import time
 import traceback
+import warnings
 from chromadb.utils import embedding_functions
 import logging
 from typing import List, Dict, Any, Tuple, Set, Optional
@@ -78,6 +79,19 @@ MODEL_FALLBACKS = [
 class ChromaMemoryStorage(MemoryStorage):
     def __init__(self, path: str, preload_model: bool = True):
         """Initialize ChromaDB storage with hardware-aware embedding function and performance optimizations."""
+        # Issue deprecation warning
+        warnings.warn(
+            "ChromaDB backend is deprecated and will be removed in v6.0.0. "
+            "Please migrate to SQLite-vec backend for better performance and reliability. "
+            "See migration guide at: https://github.com/doobidoo/mcp-memory-service#migration",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        logger.warning(
+            "DEPRECATION: ChromaDB backend is deprecated. Consider migrating to SQLite-vec backend. "
+            "Run 'python scripts/migrate_to_sqlite_vec.py' to migrate your data."
+        )
+        
         self.path = path
         self.model = None
         self.embedding_function = None
@@ -191,6 +205,14 @@ class ChromaMemoryStorage(MemoryStorage):
         device = self.embedding_settings["device"]
         batch_size = self.embedding_settings["batch_size"]
         
+        # Configure offline mode if models are cached
+        hf_home = os.environ.get('HF_HOME', os.path.expanduser("~/.cache/huggingface"))
+        model_cache_path = os.path.join(hf_home, "hub", f"models--sentence-transformers--{preferred_model.replace('/', '--')}")
+        if os.path.exists(model_cache_path):
+            os.environ['HF_HUB_OFFLINE'] = '1'
+            os.environ['TRANSFORMERS_OFFLINE'] = '1'
+            logger.info(f"Using offline mode for cached model: {preferred_model}")
+        
         # Try the preferred model first, then fall back to alternatives
         models_to_try = [preferred_model] + [m for m in MODEL_FALLBACKS if m != preferred_model]
         
@@ -249,9 +271,32 @@ class ChromaMemoryStorage(MemoryStorage):
     def _initialize_chromadb_optimized(self):
         """Initialize ChromaDB with performance optimizations."""
         try:
-            # Use PersistentClient to properly load existing databases
-            logger.info(f"Initializing ChromaDB persistent client at path: {self.path}")
-            self.client = chromadb.PersistentClient(path=self.path)
+            # Check if remote ChromaDB configuration is provided
+            remote_host = os.getenv('MCP_MEMORY_CHROMADB_HOST')
+            remote_port = os.getenv('MCP_MEMORY_CHROMADB_PORT', '8000')
+            use_ssl = os.getenv('MCP_MEMORY_CHROMADB_SSL', 'false').lower() == 'true'
+            api_key = os.getenv('MCP_MEMORY_CHROMADB_API_KEY')
+            
+            if remote_host:
+                # Use HttpClient for remote ChromaDB server
+                logger.info(f"Initializing ChromaDB HTTP client: {remote_host}:{remote_port} (SSL: {use_ssl})")
+                
+                # Prepare headers for authentication
+                headers = {}
+                if api_key:
+                    headers['X_CHROMA_TOKEN'] = api_key
+                    logger.info("Using API key authentication for remote ChromaDB")
+                
+                self.client = chromadb.HttpClient(
+                    host=remote_host,
+                    port=int(remote_port),
+                    ssl=use_ssl,
+                    headers=headers if headers else None
+                )
+            else:
+                # Use PersistentClient for local ChromaDB (existing behavior)
+                logger.info(f"Initializing ChromaDB persistent client at path: {self.path}")
+                self.client = chromadb.PersistentClient(path=self.path)
             
             # Create collection with optimized HNSW settings
             collection_metadata = {
@@ -267,8 +312,12 @@ class ChromaMemoryStorage(MemoryStorage):
                 from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
                 self.embedding_function = DefaultEmbeddingFunction()
             
+            # Allow custom collection name for remote ChromaDB deployments
+            collection_name = os.getenv('MCP_MEMORY_COLLECTION_NAME', 'memory_collection')
+            logger.info(f"Using ChromaDB collection: {collection_name}")
+            
             self.collection = self.client.get_or_create_collection(
-                name="memory_collection",
+                name=collection_name,
                 metadata=collection_metadata,
                 embedding_function=self.embedding_function
             )
@@ -301,6 +350,15 @@ class ChromaMemoryStorage(MemoryStorage):
             self.model = None
             self.embedding_function = embedding_functions.DefaultEmbeddingFunction()
             return
+            
+        # Configure offline mode for cached models
+        preferred_model = self.embedding_settings.get("model_name", "all-MiniLM-L6-v2")
+        hf_home = os.environ.get('HF_HOME', os.path.expanduser("~/.cache/huggingface"))
+        model_cache_path = os.path.join(hf_home, "hub", f"models--sentence-transformers--{preferred_model.replace('/', '--')}")
+        if os.path.exists(model_cache_path):
+            os.environ['HF_HUB_OFFLINE'] = '1'
+            os.environ['TRANSFORMERS_OFFLINE'] = '1'
+            logger.info(f"Using offline mode for cached model: {preferred_model}")
             
         # Start with the optimal model for this system
         preferred_model = self.embedding_settings["model_name"]

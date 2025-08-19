@@ -228,12 +228,44 @@ class SqliteVecMemoryStorage(MemoryStorage):
             raise RuntimeError(error_msg)
     
     async def _initialize_embedding_model(self):
-        """Initialize the sentence transformer model for embeddings."""
+        """Initialize the embedding model (ONNX or SentenceTransformer based on configuration)."""
         global _MODEL_CACHE
         
         try:
+            # Check if we should use ONNX
+            use_onnx = os.environ.get('MCP_MEMORY_USE_ONNX', '').lower() in ('1', 'true', 'yes')
+            
+            if use_onnx:
+                # Try to use ONNX embeddings
+                logger.info("Attempting to use ONNX embeddings (PyTorch-free)")
+                try:
+                    from ..embeddings import get_onnx_embedding_model
+                    
+                    # Check cache first
+                    cache_key = f"onnx_{self.embedding_model_name}"
+                    if cache_key in _MODEL_CACHE:
+                        self.embedding_model = _MODEL_CACHE[cache_key]
+                        logger.info(f"Using cached ONNX embedding model: {self.embedding_model_name}")
+                        return
+                    
+                    # Create ONNX model
+                    onnx_model = get_onnx_embedding_model(self.embedding_model_name)
+                    if onnx_model:
+                        self.embedding_model = onnx_model
+                        self.embedding_dimension = onnx_model.embedding_dimension
+                        _MODEL_CACHE[cache_key] = onnx_model
+                        logger.info(f"ONNX embedding model loaded successfully. Dimension: {self.embedding_dimension}")
+                        return
+                    else:
+                        logger.warning("ONNX model creation failed, falling back to SentenceTransformer")
+                except ImportError as e:
+                    logger.warning(f"ONNX dependencies not available: {e}")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize ONNX embeddings: {e}")
+            
+            # Fall back to SentenceTransformer
             if not SENTENCE_TRANSFORMERS_AVAILABLE:
-                raise RuntimeError("Sentence transformers not available. Install with: pip install sentence-transformers torch")
+                raise RuntimeError("Neither ONNX nor sentence-transformers available. Install one: pip install onnxruntime tokenizers OR pip install sentence-transformers torch")
             
             # Check cache first
             cache_key = self.embedding_model_name
@@ -249,15 +281,19 @@ class SqliteVecMemoryStorage(MemoryStorage):
             logger.info(f"Loading embedding model: {self.embedding_model_name}")
             logger.info(f"Using device: {device}")
             
-            # Set offline mode to use cached models
-            import os
-            os.environ['HF_HUB_OFFLINE'] = '1'
-            os.environ['TRANSFORMERS_OFFLINE'] = '1'
+            # Configure for offline mode if models are cached
+            # Only set offline mode if we detect cached models to prevent initial downloads
+            hf_home = os.environ.get('HF_HOME', os.path.expanduser("~/.cache/huggingface"))
+            model_cache_path = os.path.join(hf_home, "hub", f"models--sentence-transformers--{self.embedding_model_name.replace('/', '--')}")
+            if os.path.exists(model_cache_path):
+                os.environ['HF_HUB_OFFLINE'] = '1'
+                os.environ['TRANSFORMERS_OFFLINE'] = '1'
             
             # Try to load from cache first, fallback to direct model name
             try:
                 # First try loading from Hugging Face cache
-                cache_path = f"/home/hkr/.cache/huggingface/hub/models--sentence-transformers--{self.embedding_model_name.replace('/', '--')}"
+                hf_home = os.environ.get('HF_HOME', os.path.expanduser("~/.cache/huggingface"))
+                cache_path = os.path.join(hf_home, "hub", f"models--sentence-transformers--{self.embedding_model_name.replace('/', '--')}")
                 if os.path.exists(cache_path):
                     # Find the snapshot directory
                     snapshots_path = os.path.join(cache_path, "snapshots")
@@ -568,6 +604,68 @@ class SqliteVecMemoryStorage(MemoryStorage):
             
         except Exception as e:
             logger.error(f"Failed to search by tags: {str(e)}")
+            logger.error(traceback.format_exc())
+            return []
+    
+    async def search_by_tags(self, tags: List[str], operation: str = "AND") -> List[Memory]:
+        """Search memories by tags with AND/OR operation support."""
+        try:
+            if not self.conn:
+                logger.error("Database not initialized")
+                return []
+            
+            if not tags:
+                return []
+            
+            # Build query based on operation
+            if operation.upper() == "AND":
+                # All tags must be present (each tag must appear in the tags field)
+                tag_conditions = " AND ".join(["tags LIKE ?" for _ in tags])
+            else:  # OR operation (default for backward compatibility)
+                tag_conditions = " OR ".join(["tags LIKE ?" for _ in tags])
+            
+            tag_params = [f"%{tag}%" for tag in tags]
+            
+            cursor = self.conn.execute(f'''
+                SELECT content_hash, content, tags, memory_type, metadata,
+                       created_at, updated_at, created_at_iso, updated_at_iso
+                FROM memories 
+                WHERE {tag_conditions}
+                ORDER BY updated_at DESC
+            ''', tag_params)
+            
+            results = []
+            for row in cursor.fetchall():
+                try:
+                    content_hash, content, tags_str, memory_type, metadata_str, created_at, updated_at, created_at_iso, updated_at_iso = row
+                    
+                    # Parse tags and metadata
+                    memory_tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
+                    metadata = json.loads(metadata_str) if metadata_str else {}
+                    
+                    memory = Memory(
+                        content=content,
+                        content_hash=content_hash,
+                        tags=memory_tags,
+                        memory_type=memory_type,
+                        metadata=metadata,
+                        created_at=created_at,
+                        updated_at=updated_at,
+                        created_at_iso=created_at_iso,
+                        updated_at_iso=updated_at_iso
+                    )
+                    
+                    results.append(memory)
+                    
+                except Exception as parse_error:
+                    logger.warning(f"Failed to parse memory result: {parse_error}")
+                    continue
+            
+            logger.info(f"Found {len(results)} memories with tags: {tags} (operation: {operation})")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Failed to search by tags with operation {operation}: {str(e)}")
             logger.error(traceback.format_exc())
             return []
     
@@ -980,6 +1078,161 @@ class SqliteVecMemoryStorage(MemoryStorage):
             logger.error(traceback.format_exc())
             return []
     
+    async def get_all_memories(self) -> List[Memory]:
+        """
+        Get all memories from the database.
+        
+        Returns:
+            List of all Memory objects in the database.
+        """
+        try:
+            if not self.conn:
+                logger.error("Database not initialized, cannot retrieve memories")
+                return []
+            
+            cursor = self.conn.execute('''
+                SELECT content_hash, content, tags, memory_type, metadata,
+                       created_at, updated_at, created_at_iso, updated_at_iso
+                FROM memories
+                ORDER BY created_at DESC
+            ''')
+            
+            results = []
+            for row in cursor.fetchall():
+                try:
+                    content_hash, content, tags_str, memory_type, metadata_str = row[:5]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+                    
+                    # Parse tags and metadata
+                    tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
+                    metadata = json.loads(metadata_str) if metadata_str else {}
+                    
+                    memory = Memory(
+                        content=content,
+                        content_hash=content_hash,
+                        tags=tags,
+                        memory_type=memory_type,
+                        metadata=metadata,
+                        created_at=created_at,
+                        updated_at=updated_at,
+                        created_at_iso=created_at_iso,
+                        updated_at_iso=updated_at_iso
+                    )
+                    
+                    results.append(memory)
+                    
+                except Exception as parse_error:
+                    logger.warning(f"Failed to parse memory result: {parse_error}")
+                    continue
+            
+            logger.info(f"Retrieved {len(results)} total memories")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error getting all memories: {str(e)}")
+            return []
+
+    async def get_memories_by_time_range(self, start_time: float, end_time: float) -> List[Memory]:
+        """Get memories within a specific time range."""
+        try:
+            await self.initialize()
+            cursor = self.conn.execute('''
+                SELECT content_hash, content, tags, memory_type, metadata,
+                       created_at, updated_at, created_at_iso, updated_at_iso
+                FROM memories
+                WHERE created_at BETWEEN ? AND ?
+                ORDER BY created_at DESC
+            ''', (start_time, end_time))
+            
+            results = []
+            for row in cursor.fetchall():
+                try:
+                    content_hash, content, tags_str, memory_type, metadata_str = row[:5]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+                    
+                    # Parse tags and metadata
+                    tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
+                    metadata = json.loads(metadata_str) if metadata_str else {}
+                    
+                    memory = Memory(
+                        content=content,
+                        content_hash=content_hash,
+                        tags=tags,
+                        memory_type=memory_type,
+                        metadata=metadata,
+                        created_at=created_at,
+                        updated_at=updated_at,
+                        created_at_iso=created_at_iso,
+                        updated_at_iso=updated_at_iso
+                    )
+                    
+                    results.append(memory)
+                    
+                except Exception as parse_error:
+                    logger.warning(f"Failed to parse memory result: {parse_error}")
+                    continue
+            
+            logger.info(f"Retrieved {len(results)} memories in time range {start_time}-{end_time}")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error getting memories by time range: {str(e)}")
+            return []
+
+    async def get_memory_connections(self) -> Dict[str, int]:
+        """Get memory connection statistics."""
+        try:
+            await self.initialize()
+            # For now, return basic statistics based on tags and content similarity
+            cursor = self.conn.execute('''
+                SELECT tags, COUNT(*) as count
+                FROM memories
+                WHERE tags IS NOT NULL AND tags != ''
+                GROUP BY tags
+            ''')
+            
+            connections = {}
+            for row in cursor.fetchall():
+                tags_str, count = row
+                if tags_str:
+                    tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()]
+                    for tag in tags:
+                        connections[f"tag:{tag}"] = connections.get(f"tag:{tag}", 0) + count
+            
+            return connections
+            
+        except Exception as e:
+            logger.error(f"Error getting memory connections: {str(e)}")
+            return {}
+
+    async def get_access_patterns(self) -> Dict[str, datetime]:
+        """Get memory access pattern statistics."""
+        try:
+            await self.initialize()
+            # Return recent access patterns based on updated_at timestamps
+            cursor = self.conn.execute('''
+                SELECT content_hash, updated_at_iso
+                FROM memories
+                WHERE updated_at_iso IS NOT NULL
+                ORDER BY updated_at DESC
+                LIMIT 100
+            ''')
+            
+            patterns = {}
+            for row in cursor.fetchall():
+                content_hash, updated_at_iso = row
+                try:
+                    patterns[content_hash] = datetime.fromisoformat(updated_at_iso.replace('Z', '+00:00'))
+                except Exception:
+                    # Fallback for timestamp parsing issues
+                    patterns[content_hash] = datetime.now()
+            
+            return patterns
+            
+        except Exception as e:
+            logger.error(f"Error getting access patterns: {str(e)}")
+            return {}
+
     def close(self):
         """Close the database connection."""
         if self.conn:

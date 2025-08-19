@@ -84,9 +84,30 @@
       "Bash(avahi-browse:*)",
       "Bash(avahi-resolve-host-name:*)",
       "Bash(systemctl status:*)",
-      "Bash(gh issue view:*)"
+      "Bash(gh issue view:*)",
+      "Bash(/home/hkr/.local/bin/uv run --no-sync python run_server.py)",
+      "Bash(nmap:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(ssh-keygen:*)",
+      "Bash(ssh-copy-id:*)",
+      "Bash(git pull:*)",
+      "mcp__code-context__search_code",
+      "Bash(ssh:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh api:*)",
+      "Bash(git stash:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git stash:*)",
+      "Bash(sed:*)",
+      "WebSearch",
+      "WebFetch(domain:hub.docker.com)"
     ],
-    "deny": []
+    "deny": [],
+    "additionalDirectories": [
+      "/home/hkr/Repositories"
+    ]
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": []
