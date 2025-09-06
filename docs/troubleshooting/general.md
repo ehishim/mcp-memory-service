@@ -2,6 +2,38 @@
 
 This guide covers common issues and their solutions when working with the MCP Memory Service.
 
+## First-Time Setup Warnings (Normal Behavior)
+
+### Expected Warnings on First Run
+
+The following warnings are **completely normal** during first-time setup:
+
+#### "No snapshots directory" Warning
+```
+WARNING:mcp_memory_service.storage.sqlite_vec:Failed to load from cache: No snapshots directory
+```
+- **Status:** ✅ Normal - Service is checking for cached models
+- **Action:** None required - Model will download automatically
+- **Duration:** Appears only on first run
+
+#### "TRANSFORMERS_CACHE deprecated" Warning  
+```
+WARNING: Using TRANSFORMERS_CACHE is deprecated
+```
+- **Status:** ✅ Normal - Informational warning from Hugging Face
+- **Action:** None required - Doesn't affect functionality
+- **Duration:** May appear on each run (can be ignored)
+
+#### Model Download Messages
+```
+Downloading model 'all-MiniLM-L6-v2'...
+```
+- **Status:** ✅ Normal - One-time model download (~25MB)
+- **Action:** Wait 1-2 minutes for download to complete
+- **Duration:** First run only
+
+For detailed information, see the [First-Time Setup Guide](../first-time-setup.md).
+
 ## Common Installation Issues
 
 [Content from installation.md's troubleshooting section - already well documented]

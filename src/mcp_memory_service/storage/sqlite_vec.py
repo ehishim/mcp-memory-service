@@ -699,6 +699,47 @@ class SqliteVecMemoryStorage(MemoryStorage):
             logger.error(error_msg)
             return False, error_msg
     
+    async def get_by_hash(self, content_hash: str) -> Optional[Memory]:
+        """Get a memory by its content hash."""
+        try:
+            if not self.conn:
+                return None
+            
+            cursor = self.conn.execute('''
+                SELECT content_hash, content, tags, memory_type, metadata,
+                       created_at, updated_at, created_at_iso, updated_at_iso
+                FROM memories WHERE content_hash = ?
+            ''', (content_hash,))
+            
+            row = cursor.fetchone()
+            if not row:
+                return None
+            
+            content_hash, content, tags_str, memory_type, metadata_str = row[:5]
+            created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+            
+            # Parse tags and metadata
+            tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
+            metadata = json.loads(metadata_str) if metadata_str else {}
+            
+            memory = Memory(
+                content=content,
+                content_hash=content_hash,
+                tags=tags,
+                memory_type=memory_type,
+                metadata=metadata,
+                created_at=created_at,
+                updated_at=updated_at,
+                created_at_iso=created_at_iso,
+                updated_at_iso=updated_at_iso
+            )
+            
+            return memory
+            
+        except Exception as e:
+            logger.error(f"Failed to get memory by hash {content_hash}: {str(e)}")
+            return None
+    
     async def delete_by_tag(self, tag: str) -> Tuple[int, str]:
         """Delete memories by tag."""
         try:
@@ -1232,6 +1273,122 @@ class SqliteVecMemoryStorage(MemoryStorage):
         except Exception as e:
             logger.error(f"Error getting access patterns: {str(e)}")
             return {}
+
+    def _row_to_memory(self, row) -> Optional[Memory]:
+        """Convert database row to Memory object."""
+        try:
+            content_hash, content, tags_str, memory_type, metadata_str, created_at, updated_at, created_at_iso, updated_at_iso = row
+            
+            # Parse tags
+            tags = []
+            if tags_str:
+                try:
+                    tags = json.loads(tags_str)
+                    if not isinstance(tags, list):
+                        tags = []
+                except json.JSONDecodeError:
+                    tags = []
+            
+            # Parse metadata
+            metadata = {}
+            if metadata_str:
+                try:
+                    metadata = json.loads(metadata_str)
+                    if not isinstance(metadata, dict):
+                        metadata = {}
+                except json.JSONDecodeError:
+                    metadata = {}
+            
+            return Memory(
+                content=content,
+                content_hash=content_hash,
+                tags=tags,
+                memory_type=memory_type,
+                metadata=metadata,
+                created_at=created_at,
+                updated_at=updated_at,
+                created_at_iso=created_at_iso,
+                updated_at_iso=updated_at_iso
+            )
+            
+        except Exception as e:
+            logger.error(f"Error converting row to memory: {str(e)}")
+            return None
+
+    async def get_all_memories(self, limit: int = None, offset: int = 0) -> List[Memory]:
+        """
+        Get all memories in storage ordered by creation time (newest first).
+        
+        Args:
+            limit: Maximum number of memories to return (None for all)
+            offset: Number of memories to skip (for pagination)
+            
+        Returns:
+            List of Memory objects ordered by created_at DESC
+        """
+        try:
+            await self.initialize()
+            
+            # Build query with optional limit and offset
+            query = '''
+                SELECT content_hash, content, tags, memory_type, metadata,
+                       created_at, updated_at, created_at_iso, updated_at_iso
+                FROM memories
+                ORDER BY created_at DESC
+            '''
+            
+            params = []
+            if limit is not None:
+                query += ' LIMIT ?'
+                params.append(limit)
+                
+            if offset > 0:
+                query += ' OFFSET ?'
+                params.append(offset)
+            
+            cursor = self.conn.execute(query, params)
+            memories = []
+            
+            for row in cursor.fetchall():
+                memory = self._row_to_memory(row)
+                if memory:
+                    memories.append(memory)
+            
+            return memories
+            
+        except Exception as e:
+            logger.error(f"Error getting all memories: {str(e)}")
+            return []
+
+    async def get_recent_memories(self, n: int = 10) -> List[Memory]:
+        """
+        Get n most recent memories.
+        
+        Args:
+            n: Number of recent memories to return
+            
+        Returns:
+            List of the n most recent Memory objects
+        """
+        return await self.get_all_memories(limit=n, offset=0)
+
+    async def count_all_memories(self) -> int:
+        """
+        Get total count of memories in storage.
+        
+        Returns:
+            Total number of memories
+        """
+        try:
+            await self.initialize()
+            
+            cursor = self.conn.execute('SELECT COUNT(*) FROM memories')
+            result = cursor.fetchone()
+            return result[0] if result else 0
+            
+        except Exception as e:
+            logger.error(f"Error counting memories: {str(e)}")
+            return 0
 
     def close(self):
         """Close the database connection."""

@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version < '3.12'",
@@ -937,7 +937,7 @@ wheels = [
 
 [[package]]
 name = "mcp-memory-service"
-version = "5.2.0"
+version = "6.10.1"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -947,6 +947,7 @@ dependencies = [
     { name = "chromadb" },
     { name = "click" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "mcp" },
     { name = "psutil" },
     { name = "pypdf2" },
@@ -982,6 +983,7 @@ requires-dist = [
     { name = "chromadb", marker = "extra == 'chromadb'", specifier = "==0.5.23" },
     { name = "click", specifier = ">=8.0.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
+    { name = "httpx", specifier = ">=0.24.0" },
     { name = "mcp", specifier = ">=1.0.0,<2.0.0" },
     { name = "psutil", specifier = ">=5.9.0" },
     { name = "pypdf2", specifier = ">=3.0.0" },

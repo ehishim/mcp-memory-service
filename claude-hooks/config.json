@@ -1,0 +1,98 @@
+{
+  "memoryService": {
+    "endpoint": "https://10.0.1.30:8443",
+    "apiKey": "VhOGAoUOE5_BMzu-phDORdyXHNMcDRBxvndK_Uop",
+    "defaultTags": ["claude-code", "auto-generated"],
+    "maxMemoriesPerSession": 8,
+    "enableSessionConsolidation": true,
+    "injectAfterCompacting": false,
+    "recentFirstMode": true,
+    "recentMemoryRatio": 0.6,
+    "recentTimeWindow": "last-week",
+    "fallbackTimeWindow": "last-month",
+    "showStorageSource": true,
+    "sourceDisplayMode": "brief",
+    "healthCheckTimeout": 3000,
+    "healthCheckEnabled": true,
+    "useDetailedHealthCheck": true
+  },
+  "projectDetection": {
+    "gitRepository": true,
+    "packageFiles": ["package.json", "pyproject.toml", "Cargo.toml", "go.mod", "pom.xml"],
+    "frameworkDetection": true,
+    "languageDetection": true,
+    "confidenceThreshold": 0.3
+  },
+  "memoryScoring": {
+    "weights": {
+      "timeDecay": 0.25,
+      "tagRelevance": 0.35,
+      "contentRelevance": 0.15,
+      "contentQuality": 0.25,
+      "conversationRelevance": 0.25
+    },
+    "minRelevanceScore": 0.3,
+    "timeDecayRate": 0.1,
+    "enableConversationContext": true
+  },
+  "contextFormatting": {
+    "includeProjectSummary": true,
+    "includeRelevanceScores": false,
+    "groupByCategory": true,
+    "maxContentLength": 500,
+    "maxContentLengthCLI": 400,
+    "maxContentLengthCategorized": 350,
+    "includeTimestamps": true,
+    "truncationMode": "smart"
+  },
+  "sessionAnalysis": {
+    "extractTopics": true,
+    "extractDecisions": true,
+    "extractInsights": true,
+    "extractCodeChanges": true,
+    "extractNextSteps": true,
+    "minSessionLength": 100,
+    "minConfidence": 0.1
+  },
+  "hooks": {
+    "sessionStart": {
+      "enabled": true,
+      "timeout": 10000,
+      "priority": "high"
+    },
+    "sessionEnd": {
+      "enabled": true,
+      "timeout": 15000,
+      "priority": "normal"
+    },
+    "topicChange": {
+      "enabled": false,
+      "timeout": 5000,
+      "priority": "low"
+    }
+  },
+  "gitAnalysis": {
+    "enabled": true,
+    "commitLookback": 14,
+    "maxCommits": 20,
+    "includeChangelog": true,
+    "maxGitMemories": 3,
+    "gitContextWeight": 1.2
+  },
+  "output": {
+    "verbose": true,
+    "showMemoryDetails": true,
+    "showProjectDetails": true,
+    "showScoringDetails": false,
+    "showRecencyInfo": true,
+    "showPhaseDetails": true,
+    "showGitAnalysis": true,
+    "cleanMode": false
+  },
+  "logging": {
+    "level": "debug",
+    "enableDebug": true,
+    "logToFile": true,
+    "logFilePath": "./claude-hooks.log"
+  }
+}

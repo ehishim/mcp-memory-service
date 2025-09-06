@@ -161,7 +161,6 @@ def setup_python_paths():
 setup_python_paths()
 import asyncio
 import traceback
-import argparse
 import json
 import platform
 from collections import deque
@@ -187,7 +186,17 @@ from .config import (
     CONSOLIDATION_ENABLED,
     CONSOLIDATION_CONFIG,
     CONSOLIDATION_SCHEDULE,
-    INCLUDE_HOSTNAME
+    INCLUDE_HOSTNAME,
+    # Cloudflare configuration
+    CLOUDFLARE_API_TOKEN,
+    CLOUDFLARE_ACCOUNT_ID,
+    CLOUDFLARE_VECTORIZE_INDEX,
+    CLOUDFLARE_D1_DATABASE_ID,
+    CLOUDFLARE_R2_BUCKET,
+    CLOUDFLARE_EMBEDDING_MODEL,
+    CLOUDFLARE_LARGE_CONTENT_THRESHOLD,
+    CLOUDFLARE_MAX_RETRIES,
+    CLOUDFLARE_BASE_DELAY
 )
 # Storage imports will be done conditionally in the server class
 from .models.memory import Memory
@@ -508,6 +517,21 @@ class MemoryServer:
                         SqliteVecMemoryStorage = storage_module.SqliteVecMemoryStorage
                         self.storage = SqliteVecMemoryStorage(SQLITE_VEC_PATH)
                         logger.info(f"Created SQLite-vec storage at: {SQLITE_VEC_PATH}")
+                elif STORAGE_BACKEND == 'cloudflare':
+                    # Cloudflare backend using Vectorize, D1, and R2
+                    from .storage.cloudflare import CloudflareStorage
+                    self.storage = CloudflareStorage(
+                        api_token=CLOUDFLARE_API_TOKEN,
+                        account_id=CLOUDFLARE_ACCOUNT_ID,
+                        vectorize_index=CLOUDFLARE_VECTORIZE_INDEX,
+                        d1_database_id=CLOUDFLARE_D1_DATABASE_ID,
+                        r2_bucket=CLOUDFLARE_R2_BUCKET,
+                        embedding_model=CLOUDFLARE_EMBEDDING_MODEL,
+                        large_content_threshold=CLOUDFLARE_LARGE_CONTENT_THRESHOLD,
+                        max_retries=CLOUDFLARE_MAX_RETRIES,
+                        base_delay=CLOUDFLARE_BASE_DELAY
+                    )
+                    logger.info(f"Created Cloudflare storage with Vectorize index: {CLOUDFLARE_VECTORIZE_INDEX}")
                 else:
                     # ChromaDB backend (deprecated) - Check for migration
                     logger.warning("=" * 70)
@@ -3862,32 +3886,8 @@ Memories Archived: {report.memories_archived}"""
                 text=f"Error ingesting directory: {str(e)}"
             )]
 
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="MCP Memory Service - A semantic memory service using the Model Context Protocol"
-    )
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"MCP Memory Service {SERVER_VERSION}",
-        help="Show version information"
-    )
-    parser.add_argument(
-        "--debug", 
-        action="store_true",
-        help="Enable debug logging"
-    )
-    parser.add_argument(
-        "--chroma-path",
-        type=str,
-        default=CHROMA_PATH,
-        help="Path to ChromaDB storage"
-    )
-    return parser.parse_args()
 
 async def async_main():
-    args = parse_args()
-    
     # Apply LM Studio compatibility patch before anything else
     patch_mcp_for_lm_studio()
     
@@ -3900,12 +3900,8 @@ async def async_main():
     # Check if running with UV
     check_uv_environment()
     
-    if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logger.debug("Debug logging enabled")
-    
-    global CHROMA_PATH
-    CHROMA_PATH = args.chroma_path
+    # Debug logging is now handled by the CLI layer
+    # CHROMA_PATH is now handled by config.py reading from MCP_MEMORY_CHROMA_PATH environment variable
     
     # Print system diagnostics only for LM Studio (avoid JSON parsing errors in Claude Desktop)
     system_info = get_system_info()

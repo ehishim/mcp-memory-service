@@ -238,7 +238,7 @@ class HTTPMCPBridge {
      */
     async testEndpoint(endpoint) {
         try {
-            const healthUrl = `${endpoint}/health`;
+            const healthUrl = `${endpoint}/api/health`;
             const response = await this.makeRequestInternal(healthUrl, 'GET', null, 3000); // 3 second timeout
             return response.statusCode === 200;
         } catch (error) {
@@ -289,7 +289,10 @@ class HTTPMCPBridge {
         console.error(`[${requestId}] Starting ${method} request to ${path}`);
         
         return new Promise((resolve, reject) => {
-            const url = new URL(path, this.endpoint);
+            // Use URL constructor's built-in path resolution to avoid duplicate base paths
+            // Ensure endpoint has trailing slash for proper relative path resolution
+            const baseUrl = this.endpoint.endsWith('/') ? this.endpoint : this.endpoint + '/';
+            const url = new URL(path, baseUrl);
             const protocol = url.protocol === 'https:' ? https : http;
             
             console.error(`[${requestId}] Full URL: ${url.toString()}`);
@@ -394,15 +397,20 @@ class HTTPMCPBridge {
      */
     async storeMemory(params) {
         try {
-            const response = await this.makeRequest('/memories', 'POST', {
+            const response = await this.makeRequest('memories', 'POST', {
                 content: params.content,
                 tags: params.metadata?.tags || [],
                 memory_type: params.metadata?.type || 'note',
                 metadata: params.metadata || {}
             });
 
-            if (response.statusCode === 201) {
-                return { success: true, message: 'Memory stored successfully' };
+            if (response.statusCode === 200 || response.statusCode === 201) {
+                // Server returns 200 with success field indicating actual result
+                if (response.data.success) {
+                    return { success: true, message: response.data.message || 'Memory stored successfully' };
+                } else {
+                    return { success: false, message: response.data.message || response.data.detail || 'Failed to store memory' };
+                }
             } else {
                 return { success: false, message: response.data.detail || 'Failed to store memory' };
             }
@@ -421,7 +429,7 @@ class HTTPMCPBridge {
                 n_results: params.n_results || 5
             });
 
-            const response = await this.makeRequest(`/search?${queryParams}`, 'GET');
+            const response = await this.makeRequest(`search?${queryParams}`, 'GET');
 
             if (response.statusCode === 200) {
                 return {
@@ -455,7 +463,7 @@ class HTTPMCPBridge {
                 queryParams.append('tags', params.tags);
             }
 
-            const response = await this.makeRequest(`/memories/search/tags?${queryParams}`, 'GET');
+            const response = await this.makeRequest(`memories/search/tags?${queryParams}`, 'GET');
 
             if (response.statusCode === 200) {
                 return {
@@ -481,7 +489,7 @@ class HTTPMCPBridge {
      */
     async deleteMemory(params) {
         try {
-            const response = await this.makeRequest(`/memories/${params.content_hash}`, 'DELETE');
+            const response = await this.makeRequest(`memories/${params.content_hash}`, 'DELETE');
 
             if (response.statusCode === 200) {
                 return { success: true, message: 'Memory deleted successfully' };
@@ -498,7 +506,7 @@ class HTTPMCPBridge {
      */
     async checkHealth(params = {}) {
         try {
-            const response = await this.makeRequest('/health', 'GET');
+            const response = await this.makeRequest('health', 'GET');
 
             if (response.statusCode === 200) {
                 return {

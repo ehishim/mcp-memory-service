@@ -86,6 +86,160 @@ def get_claude_commands_directory() -> Path:
     return Path.home() / ".claude" / "commands"
 
 
+def get_claude_hooks_directory() -> Path:
+    """
+    Get the Claude Code hooks directory path.
+    
+    Returns:
+        Path to ~/.claude/hooks/
+    """
+    return Path.home() / ".claude" / "hooks"
+
+
+def check_for_legacy_claude_paths() -> Tuple[bool, List[str]]:
+    """
+    Check for legacy .claude-code directory structure and provide migration guidance.
+    
+    Returns:
+        Tuple of (legacy_found, list_of_issues_and_recommendations)
+    """
+    issues = []
+    legacy_found = False
+    
+    # Check for legacy .claude-code directories
+    legacy_paths = [
+        Path.home() / ".claude-code",
+        Path.home() / ".claude-code" / "hooks",
+        Path.home() / ".claude-code" / "commands"
+    ]
+    
+    for legacy_path in legacy_paths:
+        if legacy_path.exists():
+            legacy_found = True
+            issues.append(f"⚠ Found legacy directory: {legacy_path}")
+            
+            # Check what's in the legacy directory
+            if legacy_path.name == "hooks" and any(legacy_path.glob("*.js")):
+                issues.append(f"  → Contains hook files that should be moved to ~/.claude/hooks/")
+            elif legacy_path.name == "commands" and any(legacy_path.glob("*.md")):
+                issues.append(f"  → Contains command files that should be moved to ~/.claude/commands/")
+    
+    if legacy_found:
+        issues.append("")
+        issues.append("Migration steps:")
+        issues.append("1. Create new directory: ~/.claude/")
+        issues.append("2. Move hooks: ~/.claude-code/hooks/* → ~/.claude/hooks/")
+        issues.append("3. Move commands: ~/.claude-code/commands/* → ~/.claude/commands/") 
+        issues.append("4. Update settings.json to reference new paths")
+        issues.append("5. Remove old ~/.claude-code/ directory when satisfied")
+    
+    return legacy_found, issues
+
+
+def validate_claude_settings_paths() -> Tuple[bool, List[str]]:
+    """
+    Validate paths in Claude settings files and detect common Windows path issues.
+    
+    Returns:
+        Tuple of (all_valid, list_of_issues_and_recommendations)
+    """
+    import json
+    import platform
+    
+    issues = []
+    all_valid = True
+    
+    # Common Claude settings locations
+    settings_paths = [
+        Path.home() / ".claude" / "settings.json",
+        Path.home() / ".claude" / "settings.local.json"
+    ]
+    
+    for settings_path in settings_paths:
+        if not settings_path.exists():
+            continue
+            
+        try:
+            with open(settings_path, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+            
+            # Check hooks configuration
+            if 'hooks' in settings:
+                for hook in settings.get('hooks', []):
+                    if 'command' in hook:
+                        command = hook['command']
+                        
+                        # Check for Windows path issues
+                        if platform.system() == "Windows":
+                            if '\\' in command and not command.startswith('"'):
+                                all_valid = False
+                                issues.append(f"⚠ Windows path with backslashes in {settings_path.name}:")
+                                issues.append(f"  → {command}")
+                                issues.append(f"  → Consider using forward slashes: {command.replace(chr(92), '/')}")
+                        
+                        # Check for legacy .claude-code references
+                        if '.claude-code' in command:
+                            all_valid = False
+                            issues.append(f"⚠ Legacy path reference in {settings_path.name}:")
+                            issues.append(f"  → {command}")
+                            issues.append(f"  → Update to use .claude instead of .claude-code")
+                        
+                        # Check for missing session-start-wrapper.bat
+                        if 'session-start-wrapper.bat' in command:
+                            all_valid = False
+                            issues.append(f"⚠ Reference to non-existent wrapper file in {settings_path.name}:")
+                            issues.append(f"  → {command}")
+                            issues.append(f"  → Use Node.js script directly: node path/to/session-start.js")
+                        
+                        # Check if referenced files exist
+                        if command.startswith('node '):
+                            script_path_str = command.replace('node ', '').strip()
+                            # Handle quoted paths
+                            if script_path_str.startswith('"') and script_path_str.endswith('"'):
+                                script_path_str = script_path_str[1:-1]
+                            
+                            script_path = Path(script_path_str)
+                            if not script_path.exists() and not script_path.is_absolute():
+                                # Try to resolve relative to home directory
+                                script_path = Path.home() / script_path_str
+                            
+                            if not script_path.exists():
+                                all_valid = False
+                                issues.append(f"⚠ Hook script not found: {script_path_str}")
+                                issues.append(f"  → Check if hooks are properly installed")
+                        
+        except json.JSONDecodeError as e:
+            all_valid = False
+            issues.append(f"⚠ JSON parsing error in {settings_path.name}: {str(e)}")
+        except Exception as e:
+            all_valid = False
+            issues.append(f"⚠ Error reading {settings_path.name}: {str(e)}")
+    
+    return all_valid, issues
+
+
+def normalize_windows_path_for_json(path_str: str) -> str:
+    """
+    Normalize a Windows path for use in JSON configuration files.
+    
+    Args:
+        path_str: Path string that may contain backslashes
+        
+    Returns:
+        Path string with forward slashes suitable for JSON
+    """
+    import platform
+    
+    if platform.system() == "Windows":
+        # Convert backslashes to forward slashes
+        normalized = path_str.replace('\\', '/')
+        # Handle double backslashes from escaped strings
+        normalized = normalized.replace('//', '/')
+        return normalized
+    
+    return path_str
+
+
 def check_commands_directory_access() -> Tuple[bool, str]:
     """
     Check if we can access and write to the Claude commands directory.
@@ -355,6 +509,22 @@ def install_claude_commands(verbose: bool = True) -> bool:
     if verbose:
         print_info("Installing Claude Code commands for MCP Memory Service...")
     
+    # Check for legacy paths and provide migration guidance
+    legacy_found, legacy_issues = check_for_legacy_claude_paths()
+    if legacy_found:
+        print_warning("Legacy Claude Code directory structure detected:")
+        for issue in legacy_issues:
+            print_info(issue)
+        print_info("")
+    
+    # Validate existing settings paths
+    settings_valid, settings_issues = validate_claude_settings_paths()
+    if not settings_valid:
+        print_warning("Claude settings path issues detected:")
+        for issue in settings_issues:
+            print_info(issue)
+        print_info("")
+    
     # Check Claude Code CLI availability
     claude_available, claude_status = check_claude_code_cli()
     if not claude_available:
@@ -428,6 +598,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Install Claude Code commands for MCP Memory Service")
     parser.add_argument('--test', action='store_true', help='Test installation without installing')
     parser.add_argument('--uninstall', action='store_true', help='Uninstall commands')
+    parser.add_argument('--validate', action='store_true', help='Validate Claude configuration paths')
     parser.add_argument('--quiet', action='store_true', help='Minimal output')
     
     args = parser.parse_args()
@@ -438,6 +609,32 @@ if __name__ == "__main__":
             sys.exit(0)
         else:
             sys.exit(1)
+    elif args.validate:
+        # Path validation mode
+        print("Claude Code Configuration Validation")
+        print("=" * 40)
+        
+        # Check for legacy paths
+        legacy_found, legacy_issues = check_for_legacy_claude_paths()
+        if legacy_found:
+            print("❌ Legacy paths detected:")
+            for issue in legacy_issues:
+                print(f"   {issue}")
+        else:
+            print("✅ No legacy paths found")
+        
+        print()
+        
+        # Validate settings
+        settings_valid, settings_issues = validate_claude_settings_paths()
+        if settings_valid:
+            print("✅ Claude settings paths are valid")
+        else:
+            print("❌ Settings path issues detected:")
+            for issue in settings_issues:
+                print(f"   {issue}")
+        
+        sys.exit(0 if settings_valid and not legacy_found else 1)
     elif args.test:
         # Test mode - check prerequisites but don't install
         claude_ok, claude_msg = check_claude_code_cli()
