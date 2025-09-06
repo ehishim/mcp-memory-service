@@ -1300,7 +1300,7 @@ class MemoryServer:
                                 "match_all": {
                                     "type": "boolean",
                                     "description": "If true, memory must have ALL tags (AND logic); If false, memory needs ANY tag (OR logic)",
-                                    "default": false
+                                    "default": False
                                 }
                             },
                             "required": ["tags"]
