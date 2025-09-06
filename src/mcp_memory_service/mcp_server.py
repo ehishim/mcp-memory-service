@@ -291,10 +291,11 @@ async def search_by_tag(
         if isinstance(tags, str):
             tags = [tags]
         
-        # Search by tags
+        # Search by tags - convert match_all boolean to operation string
+        operation = "AND" if match_all else "OR"
         memories = await storage.search_by_tags(
             tags=tags,
-            match_all=match_all
+            operation=operation
         )
         
         # Format results

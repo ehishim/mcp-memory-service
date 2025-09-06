@@ -577,6 +577,62 @@ class CloudflareStorage(MemoryStorage):
             logger.error(f"Failed to search by tags: {e}")
             return []
     
+    async def search_by_tags(self, tags: List[str], operation: str = "AND") -> List[Memory]:
+        """Search memories by tags with AND/OR operation support.
+        
+        Args:
+            tags: List of tags to search for
+            operation: "AND" for all tags required, "OR" for any tag (default: "AND")
+        """
+        try:
+            if not tags:
+                return []
+            
+            if operation.upper() == "AND":
+                # For AND operation, use HAVING COUNT to ensure all tags are present
+                placeholders = ",".join(["?"] * len(tags))
+                sql = f"""
+                SELECT m.* FROM memories m
+                JOIN memory_tags mt ON m.id = mt.memory_id
+                JOIN tags t ON mt.tag_id = t.id
+                WHERE t.name IN ({placeholders})
+                GROUP BY m.id
+                HAVING COUNT(DISTINCT t.name) = ?
+                ORDER BY m.created_at DESC
+                """
+                params = tags + [len(tags)]
+            else:  # OR operation (default behavior)
+                placeholders = ",".join(["?"] * len(tags))
+                sql = f"""
+                SELECT DISTINCT m.* FROM memories m
+                JOIN memory_tags mt ON m.id = mt.memory_id
+                JOIN tags t ON mt.tag_id = t.id
+                WHERE t.name IN ({placeholders})
+                ORDER BY m.created_at DESC
+                """
+                params = tags
+            
+            payload = {"sql": sql, "params": params}
+            response = await self._retry_request("POST", f"{self.d1_url}/query", json=payload)
+            result = response.json()
+            
+            if not result.get("success"):
+                raise ValueError(f"D1 tag search failed: {result}")
+            
+            memories = []
+            if result.get("result", [{}])[0].get("results"):
+                for row in result["result"][0]["results"]:
+                    memory = await self._load_memory_from_row(row)
+                    if memory:
+                        memories.append(memory)
+            
+            logger.info(f"Found {len(memories)} memories with tags: {tags} (operation: {operation})")
+            return memories
+            
+        except Exception as e:
+            logger.error(f"Failed to search by tags with operation {operation}: {e}")
+            return []
+    
     async def _load_memory_from_row(self, row: Dict[str, Any]) -> Optional[Memory]:
         """Load memory from D1 row data."""
         try:

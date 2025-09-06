@@ -1274,12 +1274,20 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="search_by_tag",
-                        description="""Search memories by tags. Must use array format.
-                        Returns memories matching ANY of the specified tags.
+                        description="""Search memories by tags with precise AND/OR logic filtering.
+                        
+                        This tool provides server-side filtering to prevent cross-contamination
+                        and enables scalable memory queries for large knowledge bases.
 
-                        Example:
+                        Examples:
                         {
-                            "tags": ["important", "reference"]
+                            "tags": ["important", "work"],
+                            "match_all": true
+                        }
+                        
+                        {
+                            "tags": ["reference", "documentation"],
+                            "match_all": false
                         }""",
                         inputSchema={
                             "type": "object",
@@ -1287,7 +1295,12 @@ class MemoryServer:
                                 "tags": {
                                     "type": "array",
                                     "items": {"type": "string"},
-                                    "description": "List of tags to search for. Returns memories matching ANY of these tags."
+                                    "description": "List of tags to search for"
+                                },
+                                "match_all": {
+                                    "type": "boolean",
+                                    "description": "If true, memory must have ALL tags (AND logic); If false, memory needs ANY tag (OR logic)",
+                                    "default": false
                                 }
                             },
                             "required": ["tags"]
@@ -2637,6 +2650,7 @@ class MemoryServer:
 
     async def handle_search_by_tag(self, arguments: dict) -> List[types.TextContent]:
         tags = arguments.get("tags", [])
+        match_all = arguments.get("match_all", False)
         
         if not tags:
             return [types.TextContent(type="text", text="Error: Tags are required")]
@@ -2645,7 +2659,9 @@ class MemoryServer:
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
             
-            memories = await storage.search_by_tag(tags)
+            # Use search_by_tags with operation parameter for AND/OR logic
+            operation = "AND" if match_all else "OR"
+            memories = await storage.search_by_tags(tags, operation=operation)
             
             if not memories:
                 return [types.TextContent(

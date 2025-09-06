@@ -608,6 +608,67 @@ class ChromaMemoryStorage(MemoryStorage):
             logger.error(f"Error searching by tags: {e}")
             logger.error(traceback.format_exc())
             return []
+    
+    async def search_by_tags(self, tags: List[str], operation: str = "AND") -> List[Memory]:
+        """Search memories by tags with AND/OR operation support.
+        
+        Args:
+            tags: List of tags to search for
+            operation: "AND" for all tags required, "OR" for any tag (default: "AND")
+        """
+        try:
+            results = self.collection.get(
+                include=["metadatas", "documents"]
+            )
+            memories = []
+            if results["ids"]:
+                # Normalize search tags once
+                search_tags = [str(tag).strip() for tag in tags if str(tag).strip()]
+                
+                for i, doc in enumerate(results["documents"]):
+                    memory_meta = results["metadatas"][i]
+                    
+                    # Use enhanced tag parsing that handles both formats
+                    stored_tags = self._parse_tags_fast(memory_meta.get("tags", ""))
+                    
+                    # Apply AND/OR logic
+                    if operation.upper() == "AND":
+                        # All tags must be present
+                        match = all(search_tag in stored_tags for search_tag in search_tags)
+                    else:  # OR operation
+                        # Any tag must be present
+                        match = any(search_tag in stored_tags for search_tag in search_tags)
+                    
+                    if match:
+                        # Use stored timestamps or fall back to legacy timestamp field
+                        created_at = memory_meta.get("created_at") or memory_meta.get("timestamp_float") or memory_meta.get("timestamp")
+                        created_at_iso = memory_meta.get("created_at_iso") or memory_meta.get("timestamp_str")
+                        updated_at = memory_meta.get("updated_at") or created_at
+                        updated_at_iso = memory_meta.get("updated_at_iso") or created_at_iso
+                        
+                        memory = Memory(
+                            content=doc,
+                            content_hash=memory_meta["content_hash"],
+                            tags=stored_tags,
+                            memory_type=memory_meta.get("type"),
+                            # Restore timestamps with fallback logic
+                            created_at=created_at,
+                            created_at_iso=created_at_iso,
+                            updated_at=updated_at,
+                            updated_at_iso=updated_at_iso,
+                            # Include additional metadata
+                            metadata={k: v for k, v in memory_meta.items() 
+                                     if k not in ["content_hash", "tags", "type", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
+                        )
+                        memories.append(memory)
+            
+            logger.info(f"Found {len(memories)} memories with tags: {tags} (operation: {operation})")
+            return memories
+            
+        except Exception as e:
+            logger.error(f"Error searching by tags with operation {operation}: {e}")
+            logger.error(traceback.format_exc())
+            return []
 
     async def delete_by_tag(self, tag_or_tags) -> Tuple[int, str]:
         """
