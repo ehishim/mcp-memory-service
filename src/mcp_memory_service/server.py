@@ -1563,93 +1563,94 @@ class MemoryServer:
                             "required": ["before_date"]
                         }
                     ),
-                    types.Tool(
-                        name="dashboard_check_health",
-                        description="Dashboard: Retrieve basic database health status, returns JSON.",
-                        inputSchema={"type": "object", "properties": {}}
-                    ),
-                    types.Tool(
-                        name="dashboard_recall_memory",
-                        description="Dashboard: Recall memories by time expressions and return JSON format.",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "query": {
-                                    "type": "string",
-                                    "description": "Natural language query specifying the time frame or content to recall."
-                                },
-                                "n_results": {
-                                    "type": "number",
-                                    "default": 5,
-                                    "description": "Maximum number of results to return."
-                                }
-                            },
-                            "required": ["query"]
-                        }
-                    ),
-                    types.Tool(
-                        name="dashboard_retrieve_memory",
-                        description="Dashboard: Retrieve memories and return JSON format.",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "query": {
-                                    "type": "string",
-                                    "description": "Search query to find relevant memories based on content."
-                                },
-                                "n_results": {
-                                    "type": "number",
-                                    "default": 5,
-                                    "description": "Maximum number of results to return."
-                                }
-                            },
-                            "required": ["query"]
-                        }
-                    ),
-                    types.Tool(
-                        name="dashboard_search_by_tag",
-                        description="Dashboard: Search memories by tags and return JSON format.",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "tags": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "List of tags to search for. Returns memories matching ANY of these tags."
-                                }
-                            },
-                            "required": ["tags"]
-                        }
-                    ),
-                    types.Tool(
-                        name="dashboard_get_stats",
-                        description="Dashboard: Get database statistics and return JSON format.",
-                        inputSchema={"type": "object", "properties": {}}
-                    ),
-                    types.Tool(
-                        name="dashboard_optimize_db",
-                        description="Dashboard: Optimize database and return JSON format.",
-                        inputSchema={"type": "object", "properties": {}}
-                    ),
+                    # Dashboard tools commented out to reduce token usage
+                    # types.Tool(
+                    #     name="dashboard_check_health",
+                    #     description="Dashboard: Retrieve basic database health status, returns JSON.",
+                    #     inputSchema={"type": "object", "properties": {}}
+                    # ),
+                    # types.Tool(
+                    #     name="dashboard_recall_memory",
+                    #     description="Dashboard: Recall memories by time expressions and return JSON format.",
+                    #     inputSchema={
+                    #         "type": "object",
+                    #         "properties": {
+                    #             "query": {
+                    #                 "type": "string",
+                    #                 "description": "Natural language query specifying the time frame or content to recall."
+                    #             },
+                    #             "n_results": {
+                    #                 "type": "number",
+                    #                 "default": 5,
+                    #                 "description": "Maximum number of results to return."
+                    #             }
+                    #         },
+                    #         "required": ["query"]
+                    #     }
+                    # ),
+                    # types.Tool(
+                    #     name="dashboard_retrieve_memory",
+                    #     description="Dashboard: Retrieve memories and return JSON format.",
+                    #     inputSchema={
+                    #         "type": "object",
+                    #         "properties": {
+                    #             "query": {
+                    #                 "type": "string",
+                    #                 "description": "Search query to find relevant memories based on content."
+                    #             },
+                    #             "n_results": {
+                    #                 "type": "number",
+                    #                 "default": 5,
+                    #                 "description": "Maximum number of results to return."
+                    #             }
+                    #         },
+                    #         "required": ["query"]
+                    #     }
+                    # ),
+                    # types.Tool(
+                    #     name="dashboard_search_by_tag",
+                    #     description="Dashboard: Search memories by tags and return JSON format.",
+                    #     inputSchema={
+                    #         "type": "object",
+                    #         "properties": {
+                    #             "tags": {
+                    #                 "type": "array",
+                    #                 "items": {"type": "string"},
+                    #                 "description": "List of tags to search for. Returns memories matching ANY of these tags."
+                    #             }
+                    #         },
+                    #         "required": ["tags"]
+                    #     }
+                    # ),
+                    # types.Tool(
+                    #     name="dashboard_get_stats",
+                    #     description="Dashboard: Get database statistics and return JSON format.",
+                    #     inputSchema={"type": "object", "properties": {}}
+                    # ),
+                    # types.Tool(
+                    #     name="dashboard_optimize_db",
+                    #     description="Dashboard: Optimize database and return JSON format.",
+                    #     inputSchema={"type": "object", "properties": {}}
+                    # ),
                     types.Tool(
                         name="dashboard_create_backup",
                         description="Dashboard: Create database backup and return JSON format.",
                         inputSchema={"type": "object", "properties": {}}
                     ),
-                    types.Tool(
-                        name="dashboard_delete_memory",
-                        description="Dashboard: Delete a specific memory by ID and return JSON format.",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "memory_id": {
-                                    "type": "string",
-                                    "description": "The ID (content hash) of the memory to delete."
-                                }
-                            },
-                            "required": ["memory_id"]
-                        }
-                    ),
+                    # types.Tool(
+                    #     name="dashboard_delete_memory",
+                    #     description="Dashboard: Delete a specific memory by ID and return JSON format.",
+                    #     inputSchema={
+                    #         "type": "object",
+                    #         "properties": {
+                    #             "memory_id": {
+                    #                 "type": "string",
+                    #                 "description": "The ID (content hash) of the memory to delete."
+                    #             }
+                    #         },
+                    #         "required": ["memory_id"]
+                    #     }
+                    # ),
                     types.Tool(
                         name="update_memory_metadata",
                         description="""Update memory metadata without recreating the entire memory entry.
@@ -2018,30 +2019,31 @@ class MemoryServer:
                     return await self.handle_delete_by_timeframe(arguments)
                 elif name == "delete_before_date":
                     return await self.handle_delete_before_date(arguments)
-                elif name == "dashboard_check_health":
-                    logger.info("Calling handle_dashboard_check_health")
-                    return await self.handle_dashboard_check_health(arguments)
-                elif name == "dashboard_recall_memory":
-                    logger.info("Calling handle_dashboard_recall_memory")
-                    return await self.handle_dashboard_recall_memory(arguments)
-                elif name == "dashboard_retrieve_memory":
-                    logger.info("Calling handle_dashboard_retrieve_memory")
-                    return await self.handle_dashboard_retrieve_memory(arguments)
-                elif name == "dashboard_search_by_tag":
-                    logger.info("Calling handle_dashboard_search_by_tag")
-                    return await self.handle_dashboard_search_by_tag(arguments)
-                elif name == "dashboard_get_stats":
-                    logger.info("Calling handle_dashboard_get_stats")
-                    return await self.handle_dashboard_get_stats(arguments)
-                elif name == "dashboard_optimize_db":
-                    logger.info("Calling handle_dashboard_optimize_db")
-                    return await self.handle_dashboard_optimize_db(arguments)
+                # Dashboard handlers commented out to reduce token usage
+                # elif name == "dashboard_check_health":
+                #     logger.info("Calling handle_dashboard_check_health")
+                #     return await self.handle_dashboard_check_health(arguments)
+                # elif name == "dashboard_recall_memory":
+                #     logger.info("Calling handle_dashboard_recall_memory")
+                #     return await self.handle_dashboard_recall_memory(arguments)
+                # elif name == "dashboard_retrieve_memory":
+                #     logger.info("Calling handle_dashboard_retrieve_memory")
+                #     return await self.handle_dashboard_retrieve_memory(arguments)
+                # elif name == "dashboard_search_by_tag":
+                #     logger.info("Calling handle_dashboard_search_by_tag")
+                #     return await self.handle_dashboard_search_by_tag(arguments)
+                # elif name == "dashboard_get_stats":
+                #     logger.info("Calling handle_dashboard_get_stats")
+                #     return await self.handle_dashboard_get_stats(arguments)
+                # elif name == "dashboard_optimize_db":
+                #     logger.info("Calling handle_dashboard_optimize_db")
+                #     return await self.handle_dashboard_optimize_db(arguments)
                 elif name == "dashboard_create_backup":
                     logger.info("Calling handle_dashboard_create_backup")
                     return await self.handle_dashboard_create_backup(arguments)
-                elif name == "dashboard_delete_memory":
-                    logger.info("Calling handle_dashboard_delete_memory")
-                    return await self.handle_dashboard_delete_memory(arguments)
+                # elif name == "dashboard_delete_memory":
+                #     logger.info("Calling handle_dashboard_delete_memory")
+                #     return await self.handle_dashboard_delete_memory(arguments)
                 elif name == "update_memory_metadata":
                     logger.info("Calling handle_update_memory_metadata")
                     return await self.handle_update_memory_metadata(arguments)
