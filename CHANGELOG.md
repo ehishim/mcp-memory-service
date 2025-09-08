@@ -4,6 +4,32 @@ All notable changes to the MCP Memory Service project will be documented in this
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.13.2] - 2025-09-03
+
+### 🐛 **Bug Fixes**
+
+#### Python 3.13 Compatibility (Fixes Issue #96)
+- **Enhanced sqlite-vec Installation**: Added intelligent fallback strategies for Python 3.13 where pre-built wheels are not yet available
+  - Automatic retry with multiple installation methods (uv pip, standard pip, source build, GitHub install)
+  - Clear guidance for alternative solutions (Python 3.12, ChromaDB backend)
+  - Interactive prompt to switch backends if sqlite-vec installation fails
+- **Improved Error Messages**: Better error reporting with actionable manual installation options
+- **uv Package Manager Support**: Prioritizes uv pip when available for better dependency resolution
+
+### 📚 **Documentation Updates**
+
+#### Python 3.13 Support Documentation
+- **README Updates**: Added Python 3.13 compatibility note with recommended solutions
+- **First-Time Setup Guide**: New section on Python 3.13 known issues and workarounds
+- **Troubleshooting Guide**: Comprehensive sqlite-vec installation troubleshooting for Python 3.13
+- **Clear Migration Path**: Step-by-step instructions for using Python 3.12 or switching to ChromaDB
+
+### 🔧 **Installation Improvements**
+- **Multi-Strategy Installation**: Installer now tries 5 different methods before failing
+- **Source Build Fallback**: Attempts to build from source when wheels are unavailable
+- **GitHub Direct Install**: Falls back to installing directly from sqlite-vec repository
+- **Backend Switching**: Option to automatically switch to ChromaDB if sqlite-vec fails
+
 ## [6.13.1] - 2025-09-03
 
 ### 📚 **Documentation & User Experience**

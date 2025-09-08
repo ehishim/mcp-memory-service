@@ -74,6 +74,48 @@ After the first successful run:
 - Model loads from cache (5-10 seconds)
 - Service starts much faster (10-15 seconds total)
 
+## 🐍 Python 3.13 Compatibility
+
+### Known Issues
+Python 3.13 users may encounter installation issues with **sqlite-vec** due to missing pre-built wheels. The installer now includes automatic fallback methods:
+
+1. **Automatic Retry Logic**: Tries multiple installation strategies
+2. **Source Building**: Attempts to build from source if wheels unavailable
+3. **GitHub Installation**: Falls back to installing directly from repository
+4. **Backend Switching**: Option to switch to ChromaDB if sqlite-vec fails
+
+### Recommended Solutions
+If you encounter sqlite-vec installation failures on Python 3.13:
+
+**Option 1: Use Python 3.12 (Recommended)**
+```bash
+# macOS
+brew install python@3.12
+python3.12 -m venv .venv
+source .venv/bin/activate
+python install.py
+
+# Ubuntu/Linux
+sudo apt install python3.12 python3.12-venv
+python3.12 -m venv .venv
+source .venv/bin/activate
+python install.py
+```
+
+**Option 2: Use ChromaDB Backend**
+```bash
+python install.py --storage-backend chromadb
+```
+
+**Option 3: Manual sqlite-vec Installation**
+```bash
+# Try building from source
+pip install --no-binary :all: sqlite-vec
+
+# Or install from GitHub
+pip install git+https://github.com/asg017/sqlite-vec.git#subdirectory=python
+```
+
 ## 🐧 Ubuntu/Linux Specific Notes
 
 For Ubuntu 24 and other Linux distributions:

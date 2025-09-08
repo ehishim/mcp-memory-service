@@ -48,6 +48,14 @@ On your first run, you'll see some warnings that are **completely normal**:
 
 These warnings disappear after the first successful run. The service is working correctly! For details, see our [First-Time Setup Guide](docs/first-time-setup.md).
 
+### 🐍 Python 3.13 Compatibility Note
+
+**sqlite-vec** may not have pre-built wheels for Python 3.13 yet. If installation fails:
+- The installer will automatically try multiple installation methods
+- Consider using Python 3.12 for the smoothest experience: `brew install python@3.12`
+- Alternative: Use ChromaDB backend with `--storage-backend chromadb`
+- See [Troubleshooting Guide](docs/troubleshooting/general.md#python-313-sqlite-vec-issues) for details
+
 ## 📚 Complete Documentation
 
 **👉 Visit our comprehensive [Wiki](https://github.com/doobidoo/mcp-memory-service/wiki) for detailed guides:**

@@ -34,6 +34,50 @@ Downloading model 'all-MiniLM-L6-v2'...
 
 For detailed information, see the [First-Time Setup Guide](../first-time-setup.md).
 
+## Python 3.13 sqlite-vec Issues
+
+### Problem: sqlite-vec Installation Fails on Python 3.13
+**Error:** `Failed to install SQLite-vec: Command ... returned non-zero exit status 1`
+
+**Cause:** sqlite-vec doesn't have pre-built wheels for Python 3.13 yet, and no source distribution is available on PyPI.
+
+**Solutions:**
+
+1. **Automatic Fallback (v6.13.2+)**
+   - The installer now automatically tries multiple installation methods
+   - It will attempt: uv pip, standard pip, source build, and GitHub installation
+   - If all fail, you'll be prompted to switch to ChromaDB
+
+2. **Use Python 3.12 (Recommended)**
+   ```bash
+   # macOS
+   brew install python@3.12
+   python3.12 -m venv .venv
+   source .venv/bin/activate
+   python install.py
+   ```
+
+3. **Switch to ChromaDB Backend**
+   ```bash
+   python install.py --storage-backend chromadb
+   ```
+
+4. **Manual Installation Attempts**
+   ```bash
+   # Force source build
+   pip install --no-binary :all: sqlite-vec
+   
+   # Install from GitHub
+   pip install git+https://github.com/asg017/sqlite-vec.git#subdirectory=python
+   
+   # Alternative: pysqlite3-binary
+   pip install pysqlite3-binary
+   ```
+
+5. **Report Issue**
+   - Check for updates: https://github.com/asg017/sqlite-vec/issues
+   - sqlite-vec may add Python 3.13 support in future releases
+
 ## Common Installation Issues
 
 [Content from installation.md's troubleshooting section - already well documented]

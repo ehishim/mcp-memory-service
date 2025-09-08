@@ -948,6 +948,12 @@ def install_storage_backend(backend, system_info):
     print_step("3c", f"Installing {backend} storage backend")
     
     if backend == "sqlite_vec":
+        # Special handling for Python 3.13
+        if sys.version_info >= (3, 13):
+            print_info("Detected Python 3.13+ - using special installation method for sqlite-vec")
+            return install_sqlite_vec_python313(system_info)
+        
+        # Standard installation for older Python versions
         try:
             print_info("Installing SQLite-vec...")
             subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'sqlite-vec'])
@@ -1042,6 +1048,106 @@ def initialize_sqlite_vec_database(storage_path):
         print_warning(f"Database initialization failed: {e}")
         print_info("Database will be initialized on first use")
         return True  # Not a critical failure
+
+def install_sqlite_vec_python313(system_info):
+    """Special installation method for sqlite-vec on Python 3.13+."""
+    print_info("Python 3.13+ detected - sqlite-vec may not have pre-built wheels yet")
+    
+    # Check if uv is available
+    uv_path = shutil.which("uv")
+    use_uv = uv_path is not None
+    
+    # Try multiple installation strategies
+    strategies = []
+    
+    if use_uv:
+        # Strategy 1: Try with uv pip
+        strategies.append({
+            'name': 'uv pip install',
+            'cmd': [uv_path, 'pip', 'install', 'sqlite-vec'],
+            'description': 'Installing with uv package manager'
+        })
+        
+        # Strategy 2: Try with uv pip and no-binary flag
+        strategies.append({
+            'name': 'uv pip install (source build)',
+            'cmd': [uv_path, 'pip', 'install', '--no-binary', ':all:', 'sqlite-vec'],
+            'description': 'Building from source with uv'
+        })
+    
+    # Strategy 3: Standard pip install
+    strategies.append({
+        'name': 'pip install',
+        'cmd': [sys.executable, '-m', 'pip', 'install', 'sqlite-vec'],
+        'description': 'Installing with pip'
+    })
+    
+    # Strategy 4: pip with no-binary flag to force compilation
+    strategies.append({
+        'name': 'pip install (source build)',
+        'cmd': [sys.executable, '-m', 'pip', 'install', '--no-binary', ':all:', 'sqlite-vec'],
+        'description': 'Building from source with pip'
+    })
+    
+    # Strategy 5: Install from GitHub directly
+    strategies.append({
+        'name': 'GitHub install',
+        'cmd': [sys.executable, '-m', 'pip', 'install', 'git+https://github.com/asg017/sqlite-vec.git#subdirectory=python'],
+        'description': 'Installing directly from GitHub'
+    })
+    
+    # Try each strategy
+    for i, strategy in enumerate(strategies, 1):
+        try:
+            print_info(f"Attempt {i}/{len(strategies)}: {strategy['description']}...")
+            subprocess.check_call(strategy['cmd'], stderr=subprocess.PIPE)
+            print_success(f"SQLite-vec installed successfully using {strategy['name']}")
+            return True
+        except subprocess.CalledProcessError as e:
+            print_warning(f"{strategy['name']} failed: {e}")
+            if i < len(strategies):
+                print_info("Trying next installation method...")
+            continue
+        except Exception as e:
+            print_warning(f"{strategy['name']} failed with unexpected error: {e}")
+            continue
+    
+    # All strategies failed - provide manual instructions
+    print_error("Failed to install sqlite-vec with all automatic methods")
+    print_info("")
+    print_info("MANUAL INSTALLATION OPTIONS:")
+    print_info("")
+    print_info("Option 1: Use Python 3.12 (recommended)")
+    print_info("  1. Install Python 3.12: brew install python@3.12")
+    print_info("  2. Create venv: python3.12 -m venv .venv")
+    print_info("  3. Activate: source .venv/bin/activate")
+    print_info("  4. Re-run: python install.py")
+    print_info("")
+    print_info("Option 2: Install pysqlite3-binary (alternative)")
+    print_info("  pip install pysqlite3-binary")
+    print_info("")
+    print_info("Option 3: Wait for sqlite-vec Python 3.13 support")
+    print_info("  Check: https://github.com/asg017/sqlite-vec/issues")
+    print_info("")
+    print_info("Option 4: Use ChromaDB backend instead")
+    print_info("  python install.py --storage-backend chromadb")
+    print_info("")
+    
+    # Ask user if they want to try ChromaDB instead
+    if not system_info.get('non_interactive'):
+        try:
+            print("\n" + "=" * 60)
+            print("⚠️  USER INPUT REQUIRED")
+            print("=" * 60)
+            response = input("Would you like to try ChromaDB backend instead? (y/N): ").strip().lower()
+            print("=" * 60 + "\n")
+            if response in ['y', 'yes']:
+                print_info("Switching to ChromaDB backend...")
+                return install_storage_backend("chromadb", system_info)
+        except (EOFError, KeyboardInterrupt):
+            pass
+    
+    return False
 
 def install_uv():
     """Install uv package manager if not already installed."""
