@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/proxy", "stdio", "http://localhost:4000"],
+      "env": {
+        "MCP_PROXY_TARGET": "http://localhost:4000"
+      }
+    }
+  }
+}

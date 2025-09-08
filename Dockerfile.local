@@ -1,0 +1,42 @@
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv package manager
+RUN pip install uv
+
+# Set working directory
+WORKDIR /app
+
+# Copy project files
+COPY . /app/
+
+# Install project dependencies using uv
+RUN uv sync --frozen
+
+# Pre-download embedding model to avoid runtime network issues
+RUN uv run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
+# Set environment variables
+ENV MCP_MEMORY_STORAGE_BACKEND=sqlite_vec
+ENV MCP_HTTP_ENABLED=false
+ENV PYTHONUNBUFFERED=1
+
+# Create volume for persistent data storage
+VOLUME ["/app/data"]
+
+# Set database path to volume
+ENV MCP_MEMORY_SQLITE_PATH=/app/data/sqlite_vec.db
+ENV MCP_MEMORY_CHROMA_PATH=/app/data/chroma_db
+ENV MCP_MEMORY_BACKUPS_PATH=/app/data/backups
+
+# Expose MCP port
+EXPOSE 4000
+
+# Run the MCP server
+CMD ["uv", "run", "memory", "server"]
