@@ -14,6 +14,7 @@
 
 """Debug utilities for memory service."""
 from typing import Dict, Any, List
+import json
 import numpy as np
 from ..models.memory import Memory, MemoryQueryResult
 
@@ -79,60 +80,83 @@ async def debug_retrieve_memory(
 ) -> List[MemoryQueryResult]:
     """Retrieve memories with debug information including raw similarity scores."""
     try:
-        model = _get_embedding_model(storage)
-        query_embedding = model.encode(query).tolist()
-        results = storage.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results
-        )
+        # Use storage's own retrieve method which is backend-agnostic
+        results = await storage.retrieve(query, n_results)
         
-        memory_results = []
-        for i in range(len(results["ids"][0])):
-            memory = Memory.from_dict(
-                {
-                    "content": results["documents"][0][i],
-                    **results["metadatas"][0][i]
-                },
-                embedding=results["embeddings"][0][i] if "embeddings" in results else None
-            )
-            similarity = 1 - results["distances"][0][i]
-            
-            # Only include results above threshold
-            if similarity >= similarity_threshold:
-                memory_results.append(
-                    MemoryQueryResult(
-                        memory=memory,
-                        relevance_score=similarity,
-                        debug_info={
-                            "raw_similarity": similarity,
-                            "raw_distance": results["distances"][0][i],
-                            "memory_id": results["ids"][0][i]
-                        }
-                    )
-                )
+        # Filter by similarity threshold and add debug info
+        filtered_results = []
+        for result in results:
+            if result.relevance_score >= similarity_threshold:
+                # Enhance debug info
+                result.debug_info.update({
+                    "similarity_threshold": similarity_threshold,
+                    "backend": getattr(storage, '__class__', type(storage)).__name__
+                })
+                filtered_results.append(result)
         
-        return memory_results
+        return filtered_results
     except Exception as e:
         return []
 
 async def exact_match_retrieve(storage, content: str) -> List[Memory]:
     """Retrieve memories using exact content match."""
     try:
-        results = storage.collection.get(
-            where={"content": content}
-        )
+        # SQLite-Vec backend implementation
+        if hasattr(storage, 'conn') and storage.conn:
+            cursor = storage.conn.execute('''
+                SELECT content_hash, content, tags, memory_type, metadata,
+                       created_at, updated_at, created_at_iso, updated_at_iso
+                FROM memories WHERE content = ?
+            ''', (content,))
+            
+            memories = []
+            for row in cursor.fetchall():
+                try:
+                    content_hash, db_content, tags_str, memory_type, metadata_str = row[:5]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+                    
+                    # Parse tags and metadata
+                    tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
+                    metadata = json.loads(metadata_str) if metadata_str else {}
+                    
+                    memory = Memory(
+                        content=db_content,
+                        content_hash=content_hash,
+                        tags=tags,
+                        memory_type=memory_type,
+                        metadata=metadata,
+                        created_at=created_at,
+                        updated_at=updated_at,
+                        created_at_iso=created_at_iso,
+                        updated_at_iso=updated_at_iso
+                    )
+                    memories.append(memory)
+                except Exception as parse_error:
+                    continue
+            
+            return memories
         
-        memories = []
-        for i in range(len(results["ids"])):
-            memory = Memory.from_dict(
-                {
-                    "content": results["documents"][i],
-                    **results["metadatas"][i]
-                },
-                embedding=results["embeddings"][i] if "embeddings" in results else None
+        # ChromaDB backend fallback
+        elif hasattr(storage, 'collection'):
+            results = storage.collection.get(
+                where={"content": content}
             )
-            memories.append(memory)
+            
+            memories = []
+            for i in range(len(results["ids"])):
+                memory = Memory.from_dict(
+                    {
+                        "content": results["documents"][i],
+                        **results["metadatas"][i]
+                    },
+                    embedding=results["embeddings"][i] if "embeddings" in results else None
+                )
+                memories.append(memory)
+            
+            return memories
         
-        return memories
+        else:
+            return []
+            
     except Exception as e:
         return []
