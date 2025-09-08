@@ -485,9 +485,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     INNER JOIN (
                         SELECT rowid, distance 
                         FROM memory_embeddings 
-                        WHERE content_embedding MATCH ?
+                        WHERE content_embedding MATCH ? AND k = ?
                         ORDER BY distance
-                        LIMIT ?
                     ) e ON m.id = e.rowid
                     ORDER BY e.distance
                 ''', (serialize_float32(query_embedding), n_results))
@@ -1000,9 +999,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         JOIN (
                             SELECT rowid, distance 
                             FROM memory_embeddings 
-                            WHERE content_embedding MATCH ?
+                            WHERE content_embedding MATCH ? AND k = ?
                             ORDER BY distance
-                            LIMIT ?
                         ) e ON m.id = e.rowid
                     '''
                     
