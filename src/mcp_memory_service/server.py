@@ -1473,6 +1473,74 @@ class MemoryServer:
                         }
                     ),
                     types.Tool(
+                        name="get_by_hash",
+                        description="""Retrieve a specific memory by its content hash.
+
+                        Example:
+                        {
+                            "content_hash": "abc123def456..."
+                        }""",
+                        inputSchema={
+                            "type": "object",
+                            "properties": {
+                                "content_hash": {
+                                    "type": "string",
+                                    "description": "Content hash of the memory to retrieve."
+                                }
+                            },
+                            "required": ["content_hash"]
+                        }
+                    ),
+                    types.Tool(
+                        name="search_by_content",
+                        description="""Search memories containing specific text (substring search).
+
+                        Example:
+                        {
+                            "search_text": "docker",
+                            "limit": 10
+                        }""",
+                        inputSchema={
+                            "type": "object",
+                            "properties": {
+                                "search_text": {
+                                    "type": "string",
+                                    "description": "Text to search for within memory content."
+                                },
+                                "limit": {
+                                    "type": "integer",
+                                    "description": "Maximum number of results to return (default: 10).",
+                                    "default": 10
+                                }
+                            },
+                            "required": ["search_text"]
+                        }
+                    ),
+                    types.Tool(
+                        name="update_content",
+                        description="""Update memory content while preserving metadata and tags.
+
+                        Example:
+                        {
+                            "content_hash": "abc123def456...",
+                            "new_content": "Updated content here"
+                        }""",
+                        inputSchema={
+                            "type": "object",
+                            "properties": {
+                                "content_hash": {
+                                    "type": "string",
+                                    "description": "Content hash of the memory to update."
+                                },
+                                "new_content": {
+                                    "type": "string",
+                                    "description": "New content to replace the existing content."
+                                }
+                            },
+                            "required": ["content_hash", "new_content"]
+                        }
+                    ),
+                    types.Tool(
                         name="check_database_health",
                         description="Check database health and get statistics",
                         inputSchema={
@@ -2010,6 +2078,12 @@ class MemoryServer:
                     return await self.handle_debug_retrieve(arguments)
                 elif name == "exact_match_retrieve":
                     return await self.handle_exact_match_retrieve(arguments)
+                elif name == "get_by_hash":
+                    return await self.handle_get_by_hash(arguments)
+                elif name == "search_by_content":
+                    return await self.handle_search_by_content(arguments)
+                elif name == "update_content":
+                    return await self.handle_update_content(arguments)
                 elif name == "check_database_health":
                     logger.info("Calling handle_check_database_health")
                     return await self.handle_check_database_health(arguments)
@@ -3219,6 +3293,105 @@ Memories Archived: {report.memories_archived}"""
             )]
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error in exact match retrieve: {str(e)}")]
+
+    async def handle_get_by_hash(self, arguments: dict) -> List[types.TextContent]:
+        content_hash = arguments.get("content_hash")
+        if not content_hash:
+            return [types.TextContent(type="text", text="Error: Content hash is required")]
+        
+        try:
+            # Initialize storage lazily when needed
+            storage = await self._ensure_storage_initialized()
+            
+            memory = await storage.get_by_hash(content_hash)
+            
+            if not memory:
+                return [types.TextContent(type="text", text=f"No memory found with hash: {content_hash}")]
+            
+            # Format the memory information
+            memory_info = [
+                f"Content: {memory.content}",
+                f"Hash: {memory.content_hash}",
+                f"Type: {memory.memory_type}",
+                f"Created: {memory.created_at_iso or 'N/A'}",
+                f"Updated: {memory.updated_at_iso or 'N/A'}"
+            ]
+            
+            if memory.tags:
+                memory_info.append(f"Tags: {', '.join(memory.tags)}")
+            
+            if memory.metadata:
+                memory_info.append(f"Metadata: {json.dumps(memory.metadata, indent=2)}")
+            
+            return [types.TextContent(
+                type="text",
+                text="Memory found:\n\n" + "\n".join(memory_info)
+            )]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error retrieving memory by hash: {str(e)}")]
+
+    async def handle_search_by_content(self, arguments: dict) -> List[types.TextContent]:
+        search_text = arguments.get("search_text")
+        limit = arguments.get("limit", 10)
+        
+        if not search_text:
+            return [types.TextContent(type="text", text="Error: Search text is required")]
+        
+        try:
+            # Initialize storage lazily when needed
+            storage = await self._ensure_storage_initialized()
+            
+            memories = await storage.search_by_content(search_text, limit)
+            
+            if not memories:
+                return [types.TextContent(type="text", text=f"No memories found containing: '{search_text}'")]
+            
+            formatted_results = []
+            for i, memory in enumerate(memories):
+                memory_info = [
+                    f"Memory {i+1}:",
+                    f"Content: {memory.content}",
+                    f"Hash: {memory.content_hash}"
+                ]
+                
+                if memory.tags:
+                    memory_info.append(f"Tags: {', '.join(memory.tags)}")
+                
+                memory_info.append("---")
+                formatted_results.append("\n".join(memory_info))
+            
+            return [types.TextContent(
+                type="text",
+                text=f"Found {len(memories)} memories containing '{search_text}':\n\n" + "\n".join(formatted_results)
+            )]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error in content search: {str(e)}")]
+
+    async def handle_update_content(self, arguments: dict) -> List[types.TextContent]:
+        content_hash = arguments.get("content_hash")
+        new_content = arguments.get("new_content")
+        
+        if not content_hash:
+            return [types.TextContent(type="text", text="Error: Content hash is required")]
+        
+        if not new_content:
+            return [types.TextContent(type="text", text="Error: New content is required")]
+        
+        try:
+            # Initialize storage lazily when needed
+            storage = await self._ensure_storage_initialized()
+            
+            success, message = await storage.update_content(content_hash, new_content)
+            
+            if success:
+                return [types.TextContent(type="text", text=f"✅ {message}")]
+            else:
+                return [types.TextContent(type="text", text=f"❌ {message}")]
+                
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error updating content: {str(e)}")]
 
     async def handle_recall_memory(self, arguments: dict) -> List[types.TextContent]:
         """

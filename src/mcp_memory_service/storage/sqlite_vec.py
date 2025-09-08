@@ -1117,6 +1117,113 @@ class SqliteVecMemoryStorage(MemoryStorage):
             logger.error(traceback.format_exc())
             return []
     
+    async def search_by_content(self, search_text: str, limit: int = 10) -> List[Memory]:
+        """Search memories containing specific text (substring search)."""
+        try:
+            if not self.conn:
+                logger.error("Database not initialized")
+                return []
+            
+            if not search_text:
+                return []
+            
+            cursor = self.conn.execute('''
+                SELECT content_hash, content, tags, memory_type, metadata,
+                       created_at, updated_at, created_at_iso, updated_at_iso
+                FROM memories 
+                WHERE content LIKE ?
+                ORDER BY updated_at DESC
+                LIMIT ?
+            ''', (f'%{search_text}%', limit))
+            
+            memories = []
+            for row in cursor.fetchall():
+                try:
+                    content_hash, content, tags_str, memory_type, metadata_str = row[:5]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+                    
+                    # Parse tags and metadata
+                    tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
+                    metadata = json.loads(metadata_str) if metadata_str else {}
+                    
+                    memory = Memory(
+                        content=content,
+                        content_hash=content_hash,
+                        tags=tags,
+                        memory_type=memory_type,
+                        metadata=metadata,
+                        created_at=created_at,
+                        updated_at=updated_at,
+                        created_at_iso=created_at_iso,
+                        updated_at_iso=updated_at_iso
+                    )
+                    memories.append(memory)
+                except Exception as parse_error:
+                    logger.warning(f"Failed to parse memory result: {parse_error}")
+                    continue
+            
+            return memories
+            
+        except Exception as e:
+            logger.error(f"Error in content search: {str(e)}")
+            logger.error(traceback.format_exc())
+            return []
+    
+    async def update_content(self, content_hash: str, new_content: str) -> Tuple[bool, str]:
+        """Update memory content while preserving metadata and regenerating embeddings."""
+        try:
+            if not self.conn:
+                return False, "Database not initialized"
+            
+            # Get current memory to preserve metadata
+            memory = await self.get_by_hash(content_hash)
+            if not memory:
+                return False, f"Memory with hash {content_hash} not found"
+            
+            # Generate new content hash
+            from ..utils.hashing import generate_content_hash
+            new_content_hash = generate_content_hash(new_content)
+            
+            # Generate new embedding
+            new_embedding = self._generate_embedding(new_content)
+            
+            # Update memory table
+            cursor = self.conn.execute('''
+                UPDATE memories 
+                SET content = ?, content_hash = ?, updated_at = ?, updated_at_iso = ?
+                WHERE content_hash = ?
+            ''', (
+                new_content, 
+                new_content_hash, 
+                time.time(), 
+                datetime.now().isoformat() + 'Z',
+                content_hash
+            ))
+            
+            if cursor.rowcount == 0:
+                return False, "Failed to update memory content"
+            
+            # Update embedding (get memory id first)
+            cursor = self.conn.execute('SELECT id FROM memories WHERE content_hash = ?', (new_content_hash,))
+            row = cursor.fetchone()
+            
+            if row:
+                memory_id = row[0]
+                # Update embedding table  
+                self.conn.execute('''
+                    UPDATE memory_embeddings 
+                    SET content_embedding = ?
+                    WHERE rowid = ?
+                ''', (serialize_float32(new_embedding), memory_id))
+            
+            self.conn.commit()
+            return True, f"Content updated successfully. New hash: {new_content_hash}"
+            
+        except Exception as e:
+            logger.error(f"Error updating content: {str(e)}")
+            logger.error(traceback.format_exc())
+            return False, f"Error updating content: {str(e)}"
+    
     async def get_all_memories(self) -> List[Memory]:
         """
         Get all memories from the database.
