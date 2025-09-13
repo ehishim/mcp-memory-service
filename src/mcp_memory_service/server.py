@@ -405,6 +405,9 @@ class MemoryServer:
             # Don't raise the exception, just return False
             return False
 
+    def register_handlers(self):
+        """Register MCP handlers."""
+
         @self.server.list_tools()
         async def handle_list_tools() -> List[types.Tool]:
             logger.info("=== HANDLING LIST_TOOLS REQUEST ===")
