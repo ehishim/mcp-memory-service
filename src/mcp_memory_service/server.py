@@ -2267,6 +2267,164 @@ class MemoryServer:
                 text=f"Error ingesting directory: {str(e)}"
             )]
 
+    async def handle_check_embedding_model(self, arguments: dict) -> List[types.TextContent]:
+        try:
+            # Initialize storage lazily when needed
+            storage = await self._ensure_storage_initialized()
+            
+            from .utils.debug import check_embedding_model
+            result = check_embedding_model(storage)
+            return [types.TextContent(
+                type="text",
+                text=f"Embedding model status:\n{json.dumps(result, indent=2)}"
+            )]
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error checking model: {str(e)}")]
+
+    async def handle_debug_retrieve(self, arguments: dict) -> List[types.TextContent]:
+        query = arguments.get("query")
+        n_results = arguments.get("n_results", 5)
+        similarity_threshold = arguments.get("similarity_threshold", 0.0)
+        
+        if not query:
+            return [types.TextContent(type="text", text="Error: Query is required")]
+        
+        try:
+            # Initialize storage lazily when needed
+            storage = await self._ensure_storage_initialized()
+            
+            from .utils.debug import debug_retrieve_memory
+            results = await debug_retrieve_memory(
+                storage,
+                query,
+                n_results,
+                similarity_threshold
+            )
+            
+            if not results:
+                return [types.TextContent(type="text", text="No matching memories found")]
+            
+            formatted_results = []
+            for i, result in enumerate(results):
+                memory_info = [
+                    f"Memory {i+1}:",
+                    f"Content: {result.memory.content}",
+                    f"Score: {result.score:.4f}",
+                    f"Hash: {result.memory.content_hash}"
+                ]
+                
+                if result.memory.tags:
+                    memory_info.append(f"Tags: {', '.join(result.memory.tags)}")
+                memory_info.append("---")
+                formatted_results.append("\n".join(memory_info))
+            
+            return [types.TextContent(
+                type="text",
+                text="Debug retrieval results:\n\n" + "\n".join(formatted_results)
+            )]
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error in debug retrieve: {str(e)}")]
+
+    async def handle_exact_match_retrieve(self, arguments: dict) -> List[types.TextContent]:
+        content = arguments.get("content")
+        if not content:
+            return [types.TextContent(type="text", text="Error: Content is required")]
+        
+        try:
+            # Initialize storage lazily when needed
+            storage = await self._ensure_storage_initialized()
+            
+            from .utils.debug import exact_match_retrieve
+            memories = await exact_match_retrieve(storage, content)
+            
+            if not memories:
+                return [types.TextContent(type="text", text="No exact matches found")]
+            
+            formatted_results = []
+            for i, memory in enumerate(memories):
+                memory_info = [
+                    f"Memory {i+1}:",
+                    f"Content: {memory.content}",
+                    f"Hash: {memory.content_hash}"
+                ]
+                
+                if memory.tags:
+                    memory_info.append(f"Tags: {', '.join(memory.tags)}")
+                memory_info.append("---")
+                formatted_results.append("\n".join(memory_info))
+            
+            return [types.TextContent(
+                type="text",
+                text="Found the following exact matches:\n\n" + "\n".join(formatted_results)
+            )]
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error in exact match retrieve: {str(e)}")]
+
+    async def handle_get_embedding(self, arguments: dict) -> List[types.TextContent]:
+        content = arguments.get("content")
+        if not content:
+            return [types.TextContent(type="text", text="Error: Content is required")]
+        
+        try:
+            # Initialize storage lazily when needed
+            storage = await self._ensure_storage_initialized()
+            
+            from .utils.debug import get_raw_embedding
+            result = get_raw_embedding(storage, content)
+            return [types.TextContent(
+                type="text",
+                text=f"Embedding results:\n{json.dumps(result, indent=2)}"
+            )]
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error getting embedding: {str(e)}")]
+
+    async def handle_dashboard_create_backup(self, arguments: dict) -> List[types.TextContent]:
+        """Dashboard version that creates backup and returns JSON."""
+        logger.info("=== EXECUTING DASHBOARD_CREATE_BACKUP ===")
+        try:
+            import shutil
+            import os
+            import json
+            from datetime import datetime
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_name = f"memory_backup_{timestamp}"
+            backup_path = os.path.join(BACKUPS_PATH, backup_name)
+            
+            # Create backup directory
+            os.makedirs(backup_path, exist_ok=True)
+            
+            files_copied = 0
+            backend_info = {}
+            
+            # Handle SQLite-vec backend
+            if STORAGE_BACKEND == 'sqlite_vec':
+                from ..config import SQLITE_VEC_PATH
+                sqlite_path = SQLITE_VEC_PATH
+                if os.path.exists(sqlite_path):
+                    # Copy SQLite database files
+                    shutil.copy2(sqlite_path, backup_path)
+                    files_copied += 1
+                    backend_info = {"backend": "sqlite_vec", "database_path": sqlite_path}
+            
+            backup_info = {
+                "backup_name": backup_name,
+                "backup_path": backup_path,
+                "timestamp": timestamp,
+                "files_copied": files_copied,
+                "backend": backend_info
+            }
+            
+            logger.info(f"Backup created successfully: {backup_path}")
+            return [types.TextContent(
+                type="text", 
+                text=json.dumps(backup_info, indent=2)
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error creating backup: {str(e)}")
+            return [types.TextContent(type="text", text=f"Error creating backup: {str(e)}")]
+
 
 async def async_main():
     # Compatibility patches removed for minimal build
