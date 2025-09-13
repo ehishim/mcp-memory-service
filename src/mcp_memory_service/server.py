@@ -282,6 +282,10 @@ class MemoryServer:
             # DEFER CHROMADB INITIALIZATION - Initialize storage lazily when needed
             # This prevents hanging during server startup due to embedding model loading
             logger.info(f"Deferring {STORAGE_BACKEND} storage initialization to prevent hanging")
+            
+            # Initialize storage state
+            self.storage = None
+            self._storage_initialized = False
         except Exception as e:
             logger.error(f"Initialization error: {str(e)}")
             logger.error(traceback.format_exc())
