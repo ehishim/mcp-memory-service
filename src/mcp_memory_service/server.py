@@ -2287,7 +2287,8 @@ async def async_main():
                 server_name=SERVER_NAME,
                 server_version=SERVER_VERSION,
                 capabilities=memory_server.server.get_capabilities(
-                    notification_options=NotificationOptions()
+                    notification_options=NotificationOptions(),
+                    experimental_capabilities={}
                 )
             )
         )
