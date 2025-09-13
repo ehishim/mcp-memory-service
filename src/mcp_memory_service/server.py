@@ -2270,10 +2270,13 @@ async def async_main():
     system_info = get_system_info()
     
     # Initialize and run the memory server
+    logger.info("Creating MemoryServer instance...")
     memory_server = MemoryServer()
     
     # Initialize the server asynchronously
+    logger.info("Starting server initialization process...")
     init_success = await memory_server.initialize()
+    logger.info(f"Server initialization result: {init_success}")
     if not init_success:
         raise RuntimeError("Failed to initialize memory server")
     
