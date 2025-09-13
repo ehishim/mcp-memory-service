@@ -2260,6 +2260,17 @@ async def async_main():
     
     # Print system diagnostics (avoid JSON parsing errors in Claude Desktop)
     system_info = get_system_info()
+    
+    # Initialize and run the memory server
+    memory_server = MemoryServer()
+    
+    # Run the server
+    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+        await memory_server.server.run(
+            read_stream,
+            write_stream,
+            memory_server.server.create_initialization_options()
+        )
 def main():
     import signal
     
