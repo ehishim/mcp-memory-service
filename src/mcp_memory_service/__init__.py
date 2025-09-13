@@ -18,12 +18,14 @@
 import os
 import platform
 
-# Force offline mode for HuggingFace models - this MUST be done before any ML library imports
+# Configure offline mode for HuggingFace models - controlled by environment
 def setup_offline_mode():
     """Setup offline mode environment variables to prevent model downloads."""
-    # Set offline environment variables
-    os.environ['HF_HUB_OFFLINE'] = '1'
-    os.environ['TRANSFORMERS_OFFLINE'] = '1'
+    # Only set offline mode if explicitly requested via environment
+    # This allows initial model downloads while preventing accidental re-downloads
+    if os.environ.get('FORCE_OFFLINE_MODE', '').lower() in ('1', 'true', 'yes'):
+        os.environ['HF_HUB_OFFLINE'] = '1'
+        os.environ['TRANSFORMERS_OFFLINE'] = '1'
     
     # Configure cache paths
     username = os.environ.get('USERNAME', os.environ.get('USER', ''))
