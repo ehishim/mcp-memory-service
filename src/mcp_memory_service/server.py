@@ -410,6 +410,20 @@ class MemoryServer:
             # Don't raise the exception, just return False
             return False
 
+    def record_query_time(self, query_time_ms: float):
+        """Record a query time for averaging."""
+        self.query_times.append(query_time_ms)
+        logger.debug(f"Recorded query time: {query_time_ms:.2f}ms")
+
+    def get_average_query_time(self) -> float:
+        """Get the average query time from recent operations."""
+        if not self.query_times:
+            return 0.0
+        
+        avg = sum(self.query_times) / len(self.query_times)
+        logger.debug(f"Average query time: {avg:.2f}ms (from {len(self.query_times)} samples)")
+        return round(avg, 2)
+
     def register_handlers(self):
         """Register MCP handlers."""
 
