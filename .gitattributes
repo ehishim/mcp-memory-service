@@ -1,2 +1,0 @@
-# Auto-resolve lock file conflicts and regenerate lock file
-uv.lock merge=uv-lock-merge

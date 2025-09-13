@@ -7,20 +7,17 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv package manager
-RUN pip install uv
-
 # Set working directory
 WORKDIR /app
 
 # Copy project files
 COPY . /app/
 
-# Install project dependencies using uv
-RUN uv sync --frozen
+# Install dependencies using install.py
+RUN python3 install.py --non-interactive --storage-backend sqlite_vec
 
 # Pre-download embedding model to avoid runtime network issues
-RUN uv run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+RUN python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
 # Set environment variables
 ENV MCP_MEMORY_STORAGE_BACKEND=sqlite_vec
@@ -38,5 +35,5 @@ ENV MCP_MEMORY_BACKUPS_PATH=/app/data/backups
 # Expose MCP port
 EXPOSE 4000
 
-# Run the MCP server
-CMD ["uv", "run", "memory", "server"]
+# Run the MCP server using the existing entry point
+CMD ["python3", "scripts/run_memory_server.py"]

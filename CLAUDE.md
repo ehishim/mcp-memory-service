@@ -1,100 +1,151 @@
-# CLAUDE.md
+# CLAUDE.md - Minimal Build
 
-This file provides guidance to Claude Code (claude.ai/code) when working with this MCP Memory Service repository.
-
-> **Note**: Comprehensive project context has been stored in memory with tags `claude-code-reference`. Use memory retrieval to access detailed information during development.
+This file provides guidance to Claude Code (claude.ai/code) when working with this **minimized** MCP Memory Service repository.
 
 ## Overview
 
-MCP Memory Service is a Model Context Protocol server providing semantic memory and persistent storage for Claude Desktop using ChromaDB and sentence transformers.
+MCP Memory Service **Minimal Build** is a streamlined Model Context Protocol server providing core semantic memory functionality optimized for Docker deployment with SQLite-Vec and ChromaDB backends.
 
 ## Essential Commands
 
 ```bash
-# Setup & Development
-python install.py                    # Platform-aware installation
-uv run memory server                 # Start server (v6.3.0+ consolidated CLI)
-pytest tests/                       # Run tests
-python scripts/verify_environment.py # Check environment
+# Docker Deployment (Primary Method)
+docker build -f Dockerfile.local -t mcp-memory-service .
+docker run -p 4000:4000 -v $(pwd)/data:/app/data mcp-memory-service
 
-# Memory Operations (requires: python scripts/claude_commands_utils.py)
-claude /memory-store "content"       # Store information
-claude /memory-recall "query"        # Retrieve information
-claude /memory-health               # Check service status
+# Development & Testing
+python scripts/run_memory_server.py         # Direct server start
+python3 -m py_compile src/mcp_memory_service/server.py  # Syntax check
 
-# Debug & Troubleshooting
-npx @modelcontextprotocol/inspector uv run memory server  # MCP Inspector
-df -h /                             # Check disk space (critical for Litestream)
-journalctl -u mcp-memory-service -f # Monitor service logs
+# Memory Operations via MCP Protocol
+# Use through Claude Desktop or other MCP clients
 ```
 
-## Architecture
+## Architecture - Minimized
 
 **Core Components:**
-- **Server Layer**: MCP protocol implementation with async handlers and global caches (`src/mcp_memory_service/server.py`)
-- **Storage Backends**: SQLite-Vec (fast, single-client), ChromaDB (multi-client), Cloudflare (production)
-- **Web Interface**: FastAPI dashboard at `https://localhost:8443/` with REST API
-- **Claude Code Hooks**: Session lifecycle management and automatic memory awareness
+- **Server Layer**: Streamlined MCP protocol implementation (`src/mcp_memory_service/server.py` - 2,287 lines)
+- **Storage Backends**: SQLite-Vec (primary), ChromaDB (basic version)
+- **Document Ingestion**: PDF, text, markdown, and JSON processing
+- **Embedding**: Sentence transformers for semantic search
+
+**Removed Components:**
+- ❌ Web Interface (FastAPI dashboard removed)  
+- ❌ HTTP Server (multi-client coordination removed)
+- ❌ Debug utilities (production-ready only)
+- ❌ Complex consolidation system
+- ❌ LM Studio compatibility layers
+- ❌ Network discovery and port detection
 
 **Key Design Patterns:**
-- Async/await for all I/O operations
-- Type safety with Python 3.10+ hints
-- Platform detection for hardware optimization (CUDA, MPS, DirectML, ROCm)
-- Global model and embedding caches for performance
+- Async/await for I/O operations
+- Simplified client detection (Docker-aware)
+- Direct storage initialization
+- Essential tool set (5 core + 2 ingestion tools)
 
-## Environment Variables
+## Environment Variables - Minimal
 
-**Essential Configuration:**
+**Docker Configuration:**
 ```bash
-# Storage Backend
-export MCP_MEMORY_STORAGE_BACKEND=sqlite_vec  # sqlite_vec|chroma|cloudflare
+# Storage Backend (Required)
+export MCP_MEMORY_STORAGE_BACKEND=sqlite_vec
 
-# Web Interface
-export MCP_HTTP_ENABLED=true                  # Enable HTTP server
-export MCP_HTTPS_ENABLED=true                 # Enable HTTPS (production)
-export MCP_API_KEY="$(openssl rand -base64 32)" # Generate secure API key
+# Database Paths (Docker volumes)
+export MCP_MEMORY_SQLITE_PATH=/app/data/sqlite_vec.db
+export MCP_MEMORY_CHROMA_PATH=/app/data/chroma_db  
+export MCP_MEMORY_BACKUPS_PATH=/app/data/backups
 
-# Cloudflare Production (if using cloudflare backend)
-export CLOUDFLARE_API_TOKEN="your-token"      # Required for Cloudflare backend
-export CLOUDFLARE_ACCOUNT_ID="your-account"   # Required for Cloudflare backend
+# Container Detection
+export DOCKER_CONTAINER=true
 ```
 
-**Platform Support:** macOS (MPS/CPU), Windows (CUDA/DirectML/CPU), Linux (CUDA/ROCm/CPU)
+**Platform Support:** Containerized deployment (Linux/Docker), cross-platform compatible
 
-## Storage Backends
+## Storage Backends - Simplified
 
-| Backend | Performance | Use Case |
-|---------|-------------|----------|
-| SQLite-Vec | Fast (5ms read) | Development, single-client |
-| ChromaDB | Medium (15ms read) | Multi-client, team collaboration |
-| Cloudflare | Network dependent | Production, global scale |
+| Backend | Status | Use Case |
+|---------|--------|----------|
+| SQLite-Vec | ✅ Primary | Docker deployment, single container |
+| ChromaDB | ✅ Basic | Alternative storage, same container |
+| Cloudflare | ✅ Available | Production scaling (if needed) |
 
-## Development Guidelines
+## Development Guidelines - Minimal
 
-- Use `claude /memory-store` to capture decisions during development  
+- **Docker-first approach**: Use containerized deployment for consistency
 - Memory operations handle duplicates via content hashing
-- Time parsing supports natural language ("yesterday", "last week")
-- Storage backends must implement abstract base class
-- All features require corresponding tests
-- Use semantic commit messages for version management
+- Core tools only: store, retrieve, search, delete, health check, ingestion
+- Minimal dependencies: 8 essential packages in pyproject.toml
+- No web interface: MCP protocol only (stream mode)
 
-## Key Endpoints
+## Minimal Tool Set
 
-- **Health**: `https://localhost:8443/api/health`
-- **Web UI**: `https://localhost:8443/`  
-- **API**: `https://localhost:8443/api/memories`
-- **Wiki**: `https://github.com/doobidoo/mcp-memory-service/wiki`
+**Core Memory Tools (5):**
+- `store_memory` - Store content with optional tags
+- `retrieve_memory` - Semantic search and retrieval  
+- `search_by_tag` - Tag-based filtering (AND/OR logic)
+- `delete_memory` - Remove by content hash
+- `check_database_health` - System health status
 
-## Critical Issues
+**Document Ingestion (2):**
+- `ingest_document` - Process single PDF/text/markdown/JSON files
+- `ingest_directory` - Batch process document directories
 
-**Litestream Sync Issues:**
-- Disk space >95%: Litestream fails silently, clean logs: `sudo rm /var/log/syslog.*`
-- Database conflicts: Remove WAL files after DB replacement: `rm *.db-shm *.db-wal`
-- MCP service caching: Restart Claude Desktop to refresh connections
+## Docker Deployment
 
-**Common Problems:**
-- Version mismatches: Use `__version__` imports, not hardcoded values
-- Path conflicts: Check Claude Desktop config vs MCP tools paths
-- Cache issues: Clear Python bytecode and UV caches, restart fresh
+```bash
+# Build minimal container
+docker build -f Dockerfile.local -t mcp-memory-service .
 
-> **For detailed troubleshooting, architecture, and deployment guides, retrieve memories tagged with `claude-code-reference` or visit the project wiki.**
+# Run with persistent data volume
+docker run -d \
+  --name mcp-memory \
+  -p 4000:4000 \
+  -v $(pwd)/data:/app/data \
+  -e MCP_MEMORY_STORAGE_BACKEND=sqlite_vec \
+  mcp-memory-service
+
+# Check container logs
+docker logs mcp-memory -f
+```
+
+## File Structure - Minimized
+
+```
+src/mcp_memory_service/
+├── server.py (2,287 lines - main server)
+├── storage/
+│   ├── chroma.py (basic ChromaDB)
+│   ├── sqlite_vec.py (primary storage)
+│   └── cloudflare.py (production scaling)
+├── ingestion/ (6 files - document processing)
+└── [other utility modules]
+
+Key removed files:
+❌ utils/debug.py (debug utilities)
+❌ utils/db_utils.py (database utilities) 
+❌ utils/http_server_manager.py (web server)
+❌ storage/http_client.py (multi-client)
+❌ storage/chroma_enhanced.py (complex ChromaDB)
+```
+
+## Troubleshooting - Docker
+
+**Common Issues:**
+- **Container won't start**: Check port 4000 availability
+- **Storage errors**: Ensure `/app/data` volume is writable
+- **Memory issues**: Allocate sufficient container memory (512MB+)
+- **Model download**: First run downloads ~25MB embedding model
+
+**Debug Commands:**
+```bash
+# Check container status
+docker ps -a
+
+# Inspect container environment  
+docker exec -it mcp-memory env
+
+# Validate Python syntax
+docker exec -it mcp-memory python3 -m py_compile /app/src/mcp_memory_service/server.py
+```
+
+> **This is a minimal, Docker-optimized build. For full features, use the main branch.**

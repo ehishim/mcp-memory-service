@@ -1,221 +1,229 @@
-# MCP Memory Service
+# MCP Memory Service - Minimal Build
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![GitHub stars](https://img.shields.io/github/stars/doobidoo/mcp-memory-service?style=social)](https://github.com/doobidoo/mcp-memory-service/stargazers)
-[![Production Ready](https://img.shields.io/badge/Production-Ready-brightgreen?style=flat&logo=checkmark)](https://github.com/doobidoo/mcp-memory-service#-in-production)
+[![Docker Ready](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker)](https://github.com/doobidoo/mcp-memory-service#docker-deployment)
+[![Minimal Build](https://img.shields.io/badge/Build-Minimal-orange?style=flat)](https://github.com/doobidoo/mcp-memory-service/tree/lite)
 
 [![Works with Claude](https://img.shields.io/badge/Works%20with-Claude-blue)](https://claude.ai)
-[![Works with Cursor](https://img.shields.io/badge/Works%20with-Cursor-orange)](https://cursor.sh)
 [![MCP Protocol](https://img.shields.io/badge/MCP-Compatible-4CAF50?style=flat)](https://modelcontextprotocol.io/)
-[![Multi-Client](https://img.shields.io/badge/Multi--Client-13+%20Apps-FF6B35?style=flat)](https://github.com/doobidoo/mcp-memory-service/wiki)
+[![SQLite-Vec](https://img.shields.io/badge/SQLite--Vec-Primary-lightgrey?style=flat)](https://github.com/asg017/sqlite-vec)
 
-**Universal MCP memory service** providing **semantic memory search** and persistent storage for **AI assistants**. Works with **Claude Desktop, VS Code, Cursor, Continue, and 13+ AI applications** with **SQLite-vec** for fast local search and **Cloudflare** for global distribution.
+**Minimal MCP memory service** optimized for **Docker deployment** with core semantic memory functionality. Streamlined build with **SQLite-vec** primary storage, **basic ChromaDB** support, and **document ingestion** for AI assistants.
 
-<img width="240" alt="MCP Memory Service" src="https://github.com/user-attachments/assets/eab1f341-ca54-445c-905e-273cd9e89555" />
+> 🎯 **This is the `lite` branch** - a minimized version optimized for containerized deployment. For full features, see the [main branch](https://github.com/doobidoo/mcp-memory-service).
 
-## 🚀 Quick Start (2 minutes)
+## 🐳 Docker Deployment (Recommended)
 
-### Universal Installer (Recommended)
+### Quick Start
 ```bash
-# Clone and install with automatic platform detection
-git clone https://github.com/doobidoo/mcp-memory-service.git
+# Clone the lite branch
+git clone -b lite https://github.com/doobidoo/mcp-memory-service.git
 cd mcp-memory-service
-python install.py
+
+# Build and run minimal container
+docker build -f Dockerfile.local -t mcp-memory-service .
+docker run -d \
+  --name mcp-memory \
+  -p 4000:4000 \
+  -v $(pwd)/data:/app/data \
+  -e MCP_MEMORY_STORAGE_BACKEND=sqlite_vec \
+  mcp-memory-service
+
+# Check logs
+docker logs mcp-memory -f
 ```
 
-### Docker (Fastest)
+### Alternative: Direct Python
 ```bash
-# For MCP protocol (Claude Desktop)
-docker-compose up -d
+# Setup & Development (if install.py exists)
+python install.py                    # Platform-aware installation
+# OR manually install minimal dependencies
+pip install -e .
 
-# For HTTP API (Web Dashboard)
-docker-compose -f docker-compose.http.yml up -d
+# Run directly
+python scripts/run_memory_server.py
 ```
 
-### Smithery (Claude Desktop)
+## ✨ What's Included - Minimal Build
+
+**Core Features:**
+- 🧠 **Semantic Memory**: Store and retrieve information with natural language
+- 🏷️ **Tag-based Search**: Organize memories with flexible tagging
+- 📄 **Document Ingestion**: Process PDF, text, markdown, and JSON files
+- 🗃️ **SQLite-Vec Storage**: Fast local vector database (primary)
+- 🌐 **ChromaDB Support**: Alternative storage backend (basic version)
+- 🐳 **Docker Optimized**: Single container deployment
+
+**Removed from Full Version:**
+- ❌ Web Dashboard (FastAPI interface)
+- ❌ HTTP API server
+- ❌ Multi-client coordination
+- ❌ Debug utilities and complex tooling
+- ❌ LM Studio compatibility layers
+- ❌ Network discovery features
+
+## 📊 Minimal Tool Set
+
+The lite build includes **7 essential tools**:
+
+**Memory Operations (5):**
 ```bash
-# Auto-install for Claude Desktop
-npx -y @smithery/cli install @doobidoo/mcp-memory-service --client claude
+store_memory         # Store content with optional tags
+retrieve_memory      # Semantic search and retrieval
+search_by_tag       # Tag-based filtering (AND/OR logic)  
+delete_memory       # Remove by content hash
+check_database_health # System health status
 ```
 
-## ⚠️ First-Time Setup Expectations
-
-On your first run, you'll see some warnings that are **completely normal**:
-
-- **"WARNING: Failed to load from cache: No snapshots directory"** - The service is checking for cached models (first-time setup)
-- **"WARNING: Using TRANSFORMERS_CACHE is deprecated"** - Informational warning, doesn't affect functionality
-- **Model download in progress** - The service automatically downloads a ~25MB embedding model (takes 1-2 minutes)
-
-These warnings disappear after the first successful run. The service is working correctly! For details, see our [First-Time Setup Guide](docs/first-time-setup.md).
-
-### 🐍 Python 3.13 Compatibility Note
-
-**sqlite-vec** may not have pre-built wheels for Python 3.13 yet. If installation fails:
-- The installer will automatically try multiple installation methods
-- Consider using Python 3.12 for the smoothest experience: `brew install python@3.12`
-- Alternative: Use ChromaDB backend with `--storage-backend chromadb`
-- See [Troubleshooting Guide](docs/troubleshooting/general.md#python-313-sqlite-vec-issues) for details
-
-## 📚 Complete Documentation
-
-**👉 Visit our comprehensive [Wiki](https://github.com/doobidoo/mcp-memory-service/wiki) for detailed guides:**
-
-### 🚀 Setup & Installation
-- **[📋 Installation Guide](https://github.com/doobidoo/mcp-memory-service/wiki/01-Installation-Guide)** - Complete installation for all platforms and use cases
-- **[🖥️ Platform Setup Guide](https://github.com/doobidoo/mcp-memory-service/wiki/02-Platform-Setup-Guide)** - Windows, macOS, and Linux optimizations  
-- **[🔗 Integration Guide](https://github.com/doobidoo/mcp-memory-service/wiki/03-Integration-Guide)** - Claude Desktop, Claude Code, VS Code, and more
-
-### 🧠 Advanced Topics
-- **[🧠 Advanced Configuration](https://github.com/doobidoo/mcp-memory-service/wiki/04-Advanced-Configuration)** - Integration patterns, best practices, workflows
-- **[⚡ Performance Optimization](https://github.com/doobidoo/mcp-memory-service/wiki/05-Performance-Optimization)** - Speed up queries, optimize resources, scaling
-- **[👨‍💻 Development Reference](https://github.com/doobidoo/mcp-memory-service/wiki/06-Development-Reference)** - Claude Code hooks, API reference, debugging
-
-### 🔧 Help & Reference
-- **[🔧 Troubleshooting Guide](https://github.com/doobidoo/mcp-memory-service/wiki/07-TROUBLESHOOTING)** - Solutions for common issues
-- **[❓ FAQ](https://github.com/doobidoo/mcp-memory-service/wiki/08-FAQ)** - Frequently asked questions
-- **[📝 Examples](https://github.com/doobidoo/mcp-memory-service/wiki/09-Examples)** - Practical code examples and workflows
-
-## ✨ Key Features
-
-### 🧠 **Intelligent Memory Management**
-- **Semantic search** with vector embeddings
-- **Natural language time queries** ("yesterday", "last week")
-- **Tag-based organization** with smart categorization
-- **Memory consolidation** with dream-inspired algorithms
-
-### 🔗 **Universal Compatibility**
-- **Claude Desktop** - Native MCP integration
-- **Claude Code** - Memory-aware development with hooks
-- **VS Code, Cursor, Continue** - IDE extensions
-- **13+ AI applications** - REST API compatibility
-
-### 💾 **Flexible Storage**
-- **SQLite-vec** - Fast local storage (recommended)
-- **ChromaDB** - Multi-client collaboration  
-- **Cloudflare** - Global edge distribution
-- **Automatic backups** and synchronization
-
-### 🚀 **Production Ready**
-- **Cross-platform** - Windows, macOS, Linux
-- **Service installation** - Auto-start background operation
-- **HTTPS/SSL** - Secure connections
-- **Docker support** - Easy deployment
-
-## 💡 Basic Usage
-
+**Document Processing (2):**
 ```bash
-# Store a memory
-uv run memory store "Fixed race condition in authentication by adding mutex locks"
-
-# Search for relevant memories  
-uv run memory recall "authentication race condition"
-
-# Search by tags
-uv run memory search --tags python debugging
-
-# Check system health
-uv run memory health
+ingest_document     # Process single files (PDF/text/markdown/JSON)
+ingest_directory    # Batch process document directories
 ```
+
+## ⚠️ First-Time Setup
+
+**Docker users:** The container automatically downloads the embedding model (~25MB) on first run. This takes 1-2 minutes.
+
+**Common first-run messages (normal):**
+- "WARNING: sqlite-vec not available" (until dependencies install)
+- "Model download in progress" (embedding model initialization)
+- "Storage backend initialization" (first-time setup)
+
+
+## 🚀 Usage Examples
+
+### Basic Memory Operations
+```python
+# Store information (via MCP client like Claude Desktop)
+"Store this important fact: Docker containers are isolated environments"
+
+# Retrieve with semantic search  
+"What did I store about containers?"
+
+# Tag-based organization
+"Store: Meeting notes for Q4 planning" (tags: ["meetings", "q4", "planning"])
+"Find all memories tagged with 'meetings'"
+```
+
+### Document Ingestion
+```bash
+# Process single document
+ingest_document --file_path /docs/manual.pdf --tags "documentation,manual"
+
+# Batch process directory
+ingest_directory --directory_path /docs --recursive true --tags "knowledge-base"
+```
+
+## 📝 Dependencies - Minimal
+
+**Core Dependencies (8 packages):**
+```
+mcp>=1.0.0,<2.0.0          # MCP protocol
+sqlite-vec>=0.1.0          # Vector database  
+chromadb==0.5.23           # Alternative storage
+tokenizers==0.20.3         # Text tokenization
+sentence-transformers>=2.2.2 # Embeddings
+torch>=2.0.0               # ML backend
+PyPDF2>=3.0.0             # PDF processing
+chardet>=5.0.0            # Text encoding
+```
+
+**Removed Dependencies (13 packages):**
+- ❌ FastAPI, uvicorn (web server)
+- ❌ aiohttp, httpx (HTTP clients)  
+- ❌ psutil (system monitoring)
+- ❌ zeroconf (network discovery)
+- ❌ Various development and debugging tools
 
 ## 🔧 Configuration
 
-### Claude Desktop Integration
-Add to your Claude Desktop config (`~/.claude/config.json`):
+**Environment Variables:**
+```bash
+# Required
+MCP_MEMORY_STORAGE_BACKEND=sqlite_vec
 
+# Optional  
+MCP_MEMORY_SQLITE_PATH=/app/data/sqlite_vec.db
+MCP_MEMORY_CHROMA_PATH=/app/data/chroma_db
+DOCKER_CONTAINER=true  # Auto-detected in container
+```
+
+## 🐛 Troubleshooting
+
+**Container Issues:**
+```bash
+# Check container status
+docker ps -a
+
+# View logs
+docker logs mcp-memory -f
+
+# Access container shell
+docker exec -it mcp-memory /bin/bash
+
+# Test Python syntax
+docker exec -it mcp-memory python3 -m py_compile /app/src/mcp_memory_service/server.py
+```
+
+**Common Problems:**
+- **Port 4000 in use**: Change port mapping `-p 4001:4000`
+- **Storage permission errors**: Ensure data volume is writable
+- **Memory allocation**: Allocate 512MB+ for container
+- **Model download timeout**: Increase container startup timeout
+
+## 📁 File Structure
+
+```
+mcp-memory-service/
+├── Dockerfile.local           # Minimal container build
+├── pyproject.toml            # 8 core dependencies  
+├── scripts/run_memory_server.py # Direct entry point
+├── src/mcp_memory_service/
+│   ├── server.py             # Main server (2,287 lines)
+│   ├── storage/
+│   │   ├── sqlite_vec.py     # Primary storage
+│   │   ├── chroma.py         # Basic ChromaDB  
+│   │   └── cloudflare.py     # Production scaling
+│   ├── ingestion/            # Document processing
+│   └── [essential utilities]
+└── data/                     # Persistent storage (Docker volume)
+```
+
+## 🔗 Integration
+
+**Claude Desktop:** Add to your MCP configuration:
 ```json
 {
   "mcpServers": {
     "memory": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/mcp-memory-service", "run", "memory", "server"],
-      "env": {
-        "MCP_MEMORY_STORAGE_BACKEND": "sqlite_vec"
-      }
+      "command": "docker",
+      "args": ["exec", "mcp-memory", "python", "/app/scripts/run_memory_server.py"]
     }
   }
 }
 ```
 
-### Environment Variables
-```bash
-# Storage backend (sqlite_vec recommended)
-export MCP_MEMORY_STORAGE_BACKEND=sqlite_vec
+**Other MCP Clients:** Connect to `localhost:4000` for MCP stream protocol.
 
-# Enable HTTP API
-export MCP_HTTP_ENABLED=true
-export MCP_HTTP_PORT=8000
+## 📜 License
 
-# Security  
-export MCP_API_KEY="your-secure-key"
-```
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
 
-## 🏗️ Architecture
+## 🔄 Migration
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   AI Clients    │    │  MCP Protocol   │    │ Storage Backend │
-│                 │    │                 │    │                 │
-│ • Claude Desktop│◄──►│ • Memory Store  │◄──►│ • SQLite-vec    │
-│ • Claude Code   │    │ • Semantic      │    │ • ChromaDB      │
-│ • VS Code       │    │   Search        │    │ • Cloudflare    │
-│ • Cursor        │    │ • Tag System    │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
+**From Full Version:**
+- Export your data using the full version's backup tools
+- Switch to lite branch: `git checkout lite`  
+- Import data into SQLite-Vec storage
+- Adapt any custom integrations to the minimal tool set
 
-## 🛠️ Development
-
-### Project Structure
-```
-mcp-memory-service/
-├── src/mcp_memory_service/    # Core application
-│   ├── models/                # Data models
-│   ├── storage/               # Storage backends
-│   ├── web/                   # HTTP API & dashboard
-│   └── server.py              # MCP server
-├── scripts/                   # Utilities & installation
-├── tests/                     # Test suite
-└── tools/docker/              # Docker configuration
-```
-
-### Contributing
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with tests
-4. Submit a pull request
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
-
-## 🆘 Support
-
-- **📖 Documentation**: [Wiki](https://github.com/doobidoo/mcp-memory-service/wiki) - Comprehensive guides
-- **🐛 Bug Reports**: [GitHub Issues](https://github.com/doobidoo/mcp-memory-service/issues)
-- **💬 Discussions**: [GitHub Discussions](https://github.com/doobidoo/mcp-memory-service/discussions)
-- **🔧 Troubleshooting**: [Troubleshooting Guide](https://github.com/doobidoo/mcp-memory-service/wiki/07-TROUBLESHOOTING)
-
-## 📊 In Production
-
-**Real-world metrics from active deployments:**
-- **750+ memories** stored and actively used
-- **<500ms response time** for semantic search
-- **65% token reduction** in Claude Code sessions  
-- **96.7% faster** context setup (15min → 30sec)
-- **100% knowledge retention** across sessions
-
-## 🏆 Recognition
-
-- [![Smithery](https://smithery.ai/badge/@doobidoo/mcp-memory-service)](https://smithery.ai/server/@doobidoo/mcp-memory-service) **Verified MCP Server**
-- [![Glama AI](https://img.shields.io/badge/Featured-Glama%20AI-blue)](https://glama.ai/mcp/servers/bzvl3lz34o) **Featured AI Tool**
-- **Production-tested** across 13+ AI applications
-- **Community-driven** with real-world feedback and improvements
-
-## 📄 License
-
-Apache License 2.0 - see [LICENSE](LICENSE) for details.
+**To Full Version:**
+- Your SQLite-Vec data is compatible
+- Switch to main branch for web dashboard and advanced features
+- Additional dependencies will be installed automatically
 
 ---
 
-**Ready to supercharge your AI workflow?** 🚀
+> 🎯 **Minimal Build Goals**: Fastest deployment, essential features only, Docker-optimized, production-ready core functionality.
 
-👉 **[Start with our Installation Guide](https://github.com/doobidoo/mcp-memory-service/wiki/01-Installation-Guide)** or explore the **[Wiki](https://github.com/doobidoo/mcp-memory-service/wiki)** for comprehensive documentation.
-
-*Transform your AI conversations into persistent, searchable knowledge that grows with you.*

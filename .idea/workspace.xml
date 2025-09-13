@@ -1,0 +1,472 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="a2e47bf6-8ac1-4126-a55d-663cbe074b4d" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.dockerignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitattributes" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/FUNDING.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/CACHE_FIX.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/LATEST_FIXES.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/README_OPTIMIZATION.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/SECRET_CONDITIONAL_FIX.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/WORKFLOW_FIXES.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/bridge-tests.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/cleanup-images.yml.disabled" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/docker-publish.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/main-optimized.yml.disabled" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/main.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/publish-and-test.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/release-tag.yml.disabled" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/release.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.mcp.json.backup" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.mcp.json.template" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/CHANGELOG.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Dockerfile.local" beforeDir="false" afterPath="$PROJECT_DIR$/Dockerfile.local" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/NOTICE" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/RELEASE_CHECKLIST.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ROADMAP.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SPONSORS.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/deployment/deploy_fastmcp_fixed.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/deployment/deploy_http_with_mcp.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/deployment/deploy_mcp_v4.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/development/test_fastmcp.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/UBUNTU_SETUP.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/authentication.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/claude-code-compatibility.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/claude-code-integration.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/claude-code-quickstart.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/claude-desktop-setup.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/claude_integration.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/complete-setup-guide.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/database-synchronization.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/development/CLEANUP_PLAN.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/development/CLEANUP_README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/development/CLEANUP_SUMMARY.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/development/TIMESTAMP_FIX_SUMMARY.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/development/autonomous-memory-consolidation.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/development/dream-inspired-memory-consolidation.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/development/hybrid-slm-memory-consolidation.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/development/mcp-milestone.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/development/multi-client-architecture.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/development/test-results.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/distributed-sync.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/invocation_guide.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/macos-intel.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/master-guide.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/mcp-client-configuration.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/multi-client-server.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/service-installation.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/sessions/MCP_ENHANCEMENT_SESSION_MEMORY_v4.1.0.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/ubuntu.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/windows-setup.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-removed-2025-08-23/windows.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-root-cleanup-2025-08-23/AWESOME_LIST_SUBMISSION.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-root-cleanup-2025-08-23/CLOUDFLARE_IMPLEMENTATION.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-root-cleanup-2025-08-23/DOCUMENTATION_ANALYSIS.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-root-cleanup-2025-08-23/DOCUMENTATION_CLEANUP_PLAN.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-root-cleanup-2025-08-23/DOCUMENTATION_CONSOLIDATION_COMPLETE.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-root-cleanup-2025-08-23/LITESTREAM_SETUP_GUIDE.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-root-cleanup-2025-08-23/PYTORCH_DOWNLOAD_FIX.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-root-cleanup-2025-08-23/README-ORIGINAL-BACKUP.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/docs-root-cleanup-2025-08-23/lm_studio_system_prompt.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/setup-development/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/setup-development/STARTUP_SETUP_GUIDE.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/setup-development/setup_consolidation_mdns.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/archive/setup-development/test_service.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/build-container.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/README-phase2.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/config.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/config.template.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/core/memory-retrieval.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/core/session-end.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/core/session-start.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/core/topic-change.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/install.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/install_claude_hooks_windows.bat" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/install_claude_hooks_windows.ps1" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/tests/integration-test.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/tests/phase2-integration-test.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/tests/test-cross-session.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/tests/test-session-tracking.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/tests/test-threading.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/utilities/context-formatter.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/utilities/context-shift-detector.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/utilities/conversation-analyzer.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/utilities/dynamic-context-updater.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/utilities/git-analyzer.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/utilities/memory-scorer.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/utilities/project-detector.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude-hooks/utilities/session-tracker.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude_commands/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude_commands/memory-context.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude_commands/memory-health.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude_commands/memory-recall.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude_commands/memory-search.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/claude_commands/memory-store.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/deployment/empty_config.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/deployment/io.litestream.replication.plist" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/deployment/mcp-memory.service" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/deployment/smithery.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/deployment/staging_db_init.sql" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/DOCUMENTATION_AUDIT.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/HOOK_IMPROVEMENTS.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/IMAGE_RETENTION_POLICY.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/IMPLEMENTATION_PLAN_HTTP_SSE.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/LM_STUDIO_COMPATIBILITY.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/api/memory-metadata-api.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/api/tag-standardization.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/architecture.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/assets/images/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/assets/images/dashboard-v3.3.0-preview.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/assets/images/project-infographic.svg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/cloudflare-setup.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/deployment/docker.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/deployment/dual-service.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/deployment/production-guide.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/enhancement-roadmap-issue-14.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/examples/analysis-scripts.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/examples/maintenance-session-example.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/examples/memory-distribution-chart.jsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/examples/tag-schema.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/first-time-setup.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/glama-deployment.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/guides/STORAGE_BACKENDS.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/guides/advanced-command-examples.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/guides/commands-vs-mcp-server.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/guides/mcp-enhancements.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/guides/mdns-service-discovery.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/guides/migration.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/guides/scripts.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/ide-compatability.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/images/dashboard-placeholder.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/implementation/health_checks.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/implementation/performance.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/integration/homebrew.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/integration/multi-client.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/integrations.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/integrations/gemini.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/maintenance/memory-maintenance.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/remote-configuration-wiki-section.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/sqlite-vec-backend.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/technical/development.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/technical/memory-migration.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/technical/migration-log.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/technical/sqlite-vec-embedding-fixes.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/technical/tag-storage.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/testing-cloudflare-backend.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/troubleshooting/general.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/troubleshooting/sync-issues.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/tutorials/advanced-techniques.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/tutorials/data-analysis.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/tutorials/demo-session-walkthrough.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/enhanced_memory_store.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/examples/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/examples/claude-desktop-http-config.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/examples/claude_desktop_config_template.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/examples/claude_desktop_config_windows.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/examples/config/claude_desktop_config.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/examples/http-mcp-bridge.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/examples/memory_export_template.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/examples/setup/setup_multi_client_complete.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/examples/start_https_example.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/init_staging_db.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/install_service.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/install_service.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/litestream-http.service" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/litestream.service" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/litestream_master_config.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/litestream_master_config_fixed.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/litestream_replica_config.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/litestream_replica_config_fixed.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/litestream_replica_simple.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/mcp-proxy-config.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompts/load_memory_context.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pytest.ini" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements-cloudflare.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run-container.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_server.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/analyze_sqlite_vec_db.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/backup_memories.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/backup_sqlite_vec.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/check_documentation_links.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/check_server_health.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/check_sqlite_vec_status.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/claude_commands_utils.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/cleanup_corrupted_encoding.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/cleanup_memories.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/cleanup_organize.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/database/db_health_check.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/deploy_dual_services.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/export_distributable_memories.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/find_duplicates.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/find_orphaned_files.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/fix_mdns.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/fix_sitecustomize.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/generate_personalized_claude_md.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/install_linux_service.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/install_macos_service.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/install_uv.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/install_windows_service.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/installation/install.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/installation/setup_claude_mcp.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/list-collections.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/mcp-migration.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/memory_offline.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/migrate_chroma_to_sqlite.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/migrate_sqlite_vec_embeddings.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/migrate_storage.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/migrate_tags.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/migrate_timestamps.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/migrate_to_cloudflare.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/migrate_v5_enhanced.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/migration/migrate_to_sqlite_vec.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/migrations/TIMESTAMP_CLEANUP_README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/migrations/cleanup_mcp_timestamps.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/migrations/verify_mcp_timestamps.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/preload_models.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/query_memories.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/remote_ingest.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/repair_memories.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/repair_sqlite_vec_embeddings.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/repair_zero_embeddings.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/restore_memories.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/run/run-with-uv.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/run/run_mcp_memory.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/run/start_sqlite_vec.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/run_complete_test.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/run_http_server.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/service_control.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/service_utils.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/setup-git-merge-drivers.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/setup_backup_cron.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/setup_cloudflare_resources.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/sync/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/sync/export_memories.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/sync/import_memories.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/test-connection.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/test_cleanup_logic.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/test_cloudflare_backend.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/test_docker_functionality.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/test_installation.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/test_mdns.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/test_memory_api.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/test_memory_simple.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/test_migration.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/test_search_api.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/test_sqlite_vec_embeddings.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/test_sse_events.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/testing/run_memory_test.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/testing/simple_test.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/testing/test-hook.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/update_service.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/utils/memory_wrapper_uv.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/utils/smithery_wrapper.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/utils/uv_wrapper.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/uv-lock-merge.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/validate_memories.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/validate_migration.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/verify_environment.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/verify_pytorch_windows.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/verify_torch.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/setup_local_litestream.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/setup_remote_litestream.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/cli/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/cli/ingestion.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/cli/main.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/cli/utils.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/consolidation/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/consolidation/associations.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/consolidation/base.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/consolidation/clustering.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/consolidation/compression.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/consolidation/consolidator.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/consolidation/decay.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/consolidation/forgetting.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/consolidation/health.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/consolidation/scheduler.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/discovery/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/discovery/client.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/discovery/mdns_service.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/lm_studio_compat.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/mcp_server.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/server.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/mcp_memory_service/server.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/storage/chroma_enhanced.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/storage/cloudflare.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/storage/http_client.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/sync/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/sync/exporter.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/sync/importer.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/sync/litestream_config.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/utils/db_utils.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/utils/debug.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/utils/http_server_manager.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/utils/port_detection.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/web/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/web/api/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/web/api/events.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/web/api/health.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/web/api/mcp.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/web/api/memories.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/web/api/search.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/web/app.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/web/dependencies.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/web/sse.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/web/static/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mcp_memory_service/web/static/sse_test.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/sync/apply_local_changes.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/sync/manual_sync.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/sync/memory_sync.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/sync/pull_remote_changes.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/sync/push_to_remote.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/sync/resolve_conflicts.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/sync/stash_local_changes.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/sync/sync_from_remote.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/sync/sync_from_remote_noconfig.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tasks/cloudflare-api-requirements.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tasks/phase1-backend.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/bridge/mock_responses.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/bridge/package-lock.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/bridge/package.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/bridge/test_http_mcp_bridge.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/chromadb/test_chromadb_types.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/conftest.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/consolidation/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/consolidation/conftest.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/consolidation/test_associations.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/consolidation/test_clustering.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/consolidation/test_compression.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/consolidation/test_consolidator.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/consolidation/test_decay.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/consolidation/test_forgetting.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/contracts/api-specification.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/integration/package-lock.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/integration/package.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/integration/test_bridge_integration.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/integration/test_cli_interfaces.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/integration/test_concurrent_clients.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/integration/test_mcp_memory.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/integration/test_mdns_integration.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/integration/test_storage.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/integration/test_store_memory.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/performance/test_caching.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/smithery/test_smithery.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/sqlite/simple_sqlite_vec_test.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_client.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_database.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_memory_ops.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_semantic_search.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_sqlite_vec_storage.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_tag_storage.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_time_parser.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_timestamp_recall.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/timestamp/test_timestamp_issue.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/timestamp/test_timestamp_simple.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/test_chroma.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/test_cloudflare_storage.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/test_import.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/test_mdns.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/test_mdns_simple.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/test_memory.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/test_tags.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/docker/DEPRECATED.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/docker/Dockerfile" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/docker/Dockerfile.glama" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/docker/Dockerfile.slim" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/docker/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/docker/docker-compose.http.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/docker/docker-compose.pythonpath.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/docker/docker-compose.standalone.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/docker/docker-compose.uv.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/docker/docker-compose.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/docker/docker-entrypoint-persistent.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/docker/docker-entrypoint-unified.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/docker/docker-entrypoint.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/docker/test-docker-modes.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/uv.lock" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ComposerSettings">
+    <execution />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;ehishim&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/ehishim/mcp-memory-service.git&quot;,
+    &quot;accountId&quot;: &quot;2d676905-e933-4f92-a89a-c6aaa9971543&quot;
+  }
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 6
+}</component>
+  <component name="ProjectId" id="32JvD4trMdHtXvi8AmWPvaD7vrJ" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/ehishim/Projects/mcp-memory-service&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-b598e85cdad2-JavaScript-PS-252.25557.128" />
+        <option value="bundled-php-predefined-a98d8de5180a-ce40d0652d34-com.jetbrains.php.sharedIndexes-PS-252.25557.128" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="a2e47bf6-8ac1-4126-a55d-663cbe074b4d" name="Changes" comment="" />
+      <created>1757151366078</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1757151366078</updated>
+      <workItem from="1757151367134" duration="3682000" />
+      <workItem from="1757331484443" duration="1336000" />
+      <workItem from="1757358034625" duration="4007000" />
+      <workItem from="1757755067675" duration="5113000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>
