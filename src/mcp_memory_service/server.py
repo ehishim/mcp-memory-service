@@ -2309,7 +2309,7 @@ class MemoryServer:
                 memory_info = [
                     f"Memory {i+1}:",
                     f"Content: {result.memory.content}",
-                    f"Score: {result.score:.4f}",
+                    f"Score: {result.relevance_score:.4f}",
                     f"Hash: {result.memory.content_hash}"
                 ]
                 
@@ -2399,7 +2399,7 @@ class MemoryServer:
             
             # Handle SQLite-vec backend
             if STORAGE_BACKEND == 'sqlite_vec':
-                from ..config import SQLITE_VEC_PATH
+                from .config import SQLITE_VEC_PATH
                 sqlite_path = SQLITE_VEC_PATH
                 if os.path.exists(sqlite_path):
                     # Copy SQLite database files
