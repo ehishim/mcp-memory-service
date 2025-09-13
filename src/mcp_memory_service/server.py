@@ -396,7 +396,8 @@ class MemoryServer:
             # Run any async initialization tasks here
             logger.info("Starting async initialization...")
 
-            # Initialize storage to ensure it's ready
+            # Initialize storage eagerly at startup to download models
+            logger.info("Initializing storage backend eagerly at startup...")
             await self._ensure_storage_initialized()
 
             logger.info("Async initialization completed successfully")

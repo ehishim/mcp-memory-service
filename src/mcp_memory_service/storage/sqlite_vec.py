@@ -313,7 +313,10 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 logger.warning(f"Failed to load from cache: {cache_error}")
                 # Fallback to normal loading (may fail if offline)
                 logger.info("Attempting normal model loading...")
+                logger.info(f"Downloading model from HuggingFace: {self.embedding_model_name}")
+                logger.info("This may take a few minutes on first run...")
                 self.embedding_model = SentenceTransformer(self.embedding_model_name, device=device)
+                logger.info("Model download complete!")
             
             # Update embedding dimension based on actual model
             test_embedding = self.embedding_model.encode(["test"], convert_to_numpy=True)
