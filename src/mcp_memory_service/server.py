@@ -2286,9 +2286,18 @@ async def async_main():
             InitializationOptions(
                 server_name=SERVER_NAME,
                 server_version=SERVER_VERSION,
+                # Use the latest protocol version to ensure compatibility with all clients
+                protocol_version="2024-11-05",
                 capabilities=memory_server.server.get_capabilities(
                     notification_options=NotificationOptions(),
-                    experimental_capabilities={}
+                    experimental_capabilities={
+                        "hardware_info": {
+                            "architecture": system_info.architecture,
+                            "accelerator": system_info.accelerator,
+                            "memory_gb": system_info.memory_gb,
+                            "cpu_count": system_info.cpu_count
+                        }
+                    }
                 )
             )
         )
