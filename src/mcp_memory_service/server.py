@@ -2264,12 +2264,25 @@ async def async_main():
     # Initialize and run the memory server
     memory_server = MemoryServer()
     
-    # Run the server
+    # Initialize the server asynchronously
+    init_success = await memory_server.initialize()
+    if not init_success:
+        raise RuntimeError("Failed to initialize memory server")
+    
+    # Run the server with stdio
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+        logger.info("Server started and ready to handle requests")
+        
         await memory_server.server.run(
             read_stream,
             write_stream,
-            memory_server.server.create_initialization_options()
+            InitializationOptions(
+                server_name=SERVER_NAME,
+                server_version=SERVER_VERSION,
+                capabilities=memory_server.server.get_capabilities(
+                    notification_options=NotificationOptions()
+                )
+            )
         )
 def main():
     import signal
