@@ -352,6 +352,10 @@ class MCPHttpClient:
         for mem_data in memory_list:
             try:
                 if isinstance(mem_data, dict):
+                    # Map API 'hash' field to internal 'content_hash' field
+                    if "hash" in mem_data and "content_hash" not in mem_data:
+                        mem_data["content_hash"] = mem_data["hash"]
+
                     # Ensure tags is a list
                     if "tags" in mem_data and isinstance(mem_data["tags"], str):
                         mem_data["tags"] = [t.strip() for t in mem_data["tags"].split(",") if t.strip()]
