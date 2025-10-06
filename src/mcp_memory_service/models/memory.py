@@ -57,6 +57,26 @@ class Memory:
             updated_at_iso=self.updated_at_iso
         )
 
+    @staticmethod
+    def _parse_iso_timestamp(iso_str: str) -> float:
+        """Convert ISO timestamp string to Unix timestamp float."""
+        if DATEUTIL_AVAILABLE:
+            return dateutil_parser.isoparse(iso_str).timestamp()
+        else:
+            # Fallback to basic ISO parsing
+            try:
+                if iso_str.endswith('Z'):
+                    dt = datetime.fromisoformat(iso_str[:-1])
+                elif '+' in iso_str or iso_str.count('-') > 2:
+                    dt = datetime.fromisoformat(iso_str)
+                else:
+                    dt = datetime.fromisoformat(iso_str)
+                return dt.timestamp()
+            except:
+                # Last resort: try strptime
+                dt = datetime.strptime(iso_str[:19], "%Y-%m-%dT%H:%M:%S")
+                return dt.timestamp()
+
     def _sync_timestamps(self, created_at=None, created_at_iso=None, updated_at=None, updated_at_iso=None):
         """
         Synchronize timestamp fields to ensure all formats are available.
@@ -192,14 +212,23 @@ class Memory:
         created_at_iso = data.get("created_at_iso")
         updated_at = data.get("updated_at")
         updated_at_iso = data.get("updated_at_iso")
-        
+
+        # Handle ISO string timestamps from API (convert to float + keep ISO)
+        if isinstance(created_at, str):
+            created_at_iso = created_at
+            created_at = cls._parse_iso_timestamp(created_at)
+
+        if isinstance(updated_at, str):
+            updated_at_iso = updated_at
+            updated_at = cls._parse_iso_timestamp(updated_at)
+
         # If new fields are missing, try to get from legacy timestamp fields
         if created_at is None and created_at_iso is None:
             if "timestamp_float" in data:
                 created_at = float(data["timestamp_float"])
             elif "timestamp" in data:
                 created_at = float(data["timestamp"])
-            
+
             if "timestamp_str" in data and created_at_iso is None:
                 created_at_iso = data["timestamp_str"]
         
