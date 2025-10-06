@@ -434,80 +434,33 @@ class MemoryServer:
                 tools = [
                     types.Tool(
                         name="store_memory",
-                        description="""Store new information with optional tags and metadata.
-
-                       Examples:
-                        {
-                            "content": "Memory content",
-                            "tags": ["important", "reference"],
-                            "metadata": {
-                                "custom_field": "value"
-                            }
-                        }
-
-                        {
-                            "content": "Memory content"
-                        }""",
+                        description="Store memory with optional tags/metadata. Returns hash.",
                         inputSchema={
                             "type": "object",
                             "properties": {
-                                "content": {
-                                    "type": "string",
-                                    "description": "The memory content to store."
-                                },
+                                "content": {"type": "string"},
                                 "tags": {
                                     "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "Optional array of tags to categorize the memory."
+                                    "items": {"type": "string"}
                                 },
-                                "metadata": {
-                                    "type": "object",
-                                    "description": "Optional custom metadata fields."
-                                }
+                                "metadata": {"type": "object"}
                             },
                             "required": ["content"]
                         }
                     ),
                     types.Tool(
                         name="recall_memory",
-                        description="""Unified memory retrieval with semantic search and natural language time filtering.
-
-                        This tool handles all memory retrieval scenarios:
-                        - Pure semantic search: "docker configurations", "python examples"
-                        - Time-based filtering: "last week", "yesterday afternoon", "January 2024"
-                        - Combined search: "docker from last month", "python code from yesterday"
-
-                        Supported time expressions:
-                        - Relative: "yesterday", "last week", "2 days ago", "3 months ago"
-                        - Seasonal: "last summer", "this winter", "spring"
-                        - Named dates: "Christmas", "Thanksgiving", "New Year"
-                        - Specific: "January 2024", "last Monday", "yesterday morning"
-
-                        Examples:
-                        {
-                            "query": "docker configurations"
-                        }
-
-                        {
-                            "query": "last week"
-                        }
-
-                        {
-                            "query": "find information about databases from two months ago",
-                            "n_results": 5
-                        }
-                        """,
+                        description="Semantic search with natural language time filtering.",
                         inputSchema={
                             "type": "object",
                             "properties": {
                                 "query": {
                                     "type": "string",
-                                    "description": "Search query with optional time expressions. Can be pure semantic search, pure time filtering, or combined."
+                                    "description": "Supports time expressions (yesterday, last week, Jan 2024)"
                                 },
                                 "n_results": {
                                     "type": "number",
-                                    "default": 5,
-                                    "description": "Maximum number of results to return."
+                                    "default": 5
                                 }
                             },
                             "required": ["query"]
@@ -515,32 +468,17 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="search_by_tag",
-                        description="""Search memories by tags with precise AND/OR logic filtering.
-                        
-                        This tool provides server-side filtering to prevent cross-contamination
-                        and enables scalable memory queries for large knowledge bases.
-
-                        Examples:
-                        {
-                            "tags": ["important", "work"],
-                            "match_all": true
-                        }
-                        
-                        {
-                            "tags": ["reference", "documentation"],
-                            "match_all": false
-                        }""",
+                        description="Filter memories by tags with AND/OR logic.",
                         inputSchema={
                             "type": "object",
                             "properties": {
                                 "tags": {
                                     "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "List of tags to search for"
+                                    "items": {"type": "string"}
                                 },
                                 "match_all": {
                                     "type": "boolean",
-                                    "description": "If true, memory must have ALL tags (AND logic); If false, memory needs ANY tag (OR logic)",
+                                    "description": "true=AND, false=OR",
                                     "default": False
                                 }
                             },
@@ -549,18 +487,7 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="delete_memory",
-                        description="""Delete one or more memories by their hash.
-
-                        Supports both single and bulk deletion.
-
-                        Examples:
-                        {
-                            "hash": "a1b2c3d4..."
-                        }
-
-                        {
-                            "hash": ["hash1", "hash2", "hash3"]
-                        }""",
+                        description="Delete memory by hash. Supports single or array.",
                         inputSchema={
                             "type": "object",
                             "properties": {
@@ -569,7 +496,7 @@ class MemoryServer:
                                         {"type": "string"},
                                         {"type": "array", "items": {"type": "string"}}
                                     ],
-                                    "description": "Single hash or array of hashes to delete"
+                                    "description": "String or array of strings"
                                 }
                             },
                             "required": ["hash"]
@@ -577,32 +504,17 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="delete_by_tag",
-                        description="""Delete memories by tags with precise AND/OR logic filtering.
-
-                        Mirrors search_by_tag functionality for consistent API design.
-                        WARNING: This permanently deletes memories - use with caution.
-
-                        Examples:
-                        {
-                            "tags": ["temporary", "outdated"],
-                            "match_all": false
-                        }
-
-                        {
-                            "tags": ["important", "urgent"],
-                            "match_all": true
-                        }""",
+                        description="Delete memories by tags. Permanent operation.",
                         inputSchema={
                             "type": "object",
                             "properties": {
                                 "tags": {
                                     "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "List of tags to match for deletion"
+                                    "items": {"type": "string"}
                                 },
                                 "match_all": {
                                     "type": "boolean",
-                                    "description": "If true, memory must have ALL tags (AND logic); If false, memory needs ANY tag (OR logic)",
+                                    "description": "true=AND, false=OR",
                                     "default": False
                                 }
                             },
@@ -611,42 +523,24 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="get_by_hash",
-                        description="""Retrieve a specific memory by its content hash.
-
-                        Example:
-                        {
-                            "content_hash": "abc123def456..."
-                        }""",
+                        description="Retrieve specific memory by hash.",
                         inputSchema={
                             "type": "object",
                             "properties": {
-                                "content_hash": {
-                                    "type": "string",
-                                    "description": "Content hash of the memory to retrieve."
-                                }
+                                "hash": {"type": "string"}
                             },
-                            "required": ["content_hash"]
+                            "required": ["hash"]
                         }
                     ),
                     types.Tool(
                         name="search_by_content",
-                        description="""Search memories containing specific text (substring search).
-
-                        Example:
-                        {
-                            "search_text": "docker",
-                            "limit": 10
-                        }""",
+                        description="Substring text search in memory content.",
                         inputSchema={
                             "type": "object",
                             "properties": {
-                                "search_text": {
-                                    "type": "string",
-                                    "description": "Text to search for within memory content."
-                                },
+                                "search_text": {"type": "string"},
                                 "limit": {
                                     "type": "integer",
-                                    "description": "Maximum number of results to return (default: 10).",
                                     "default": 10
                                 }
                             },
@@ -654,209 +548,43 @@ class MemoryServer:
                         }
                     ),
                     types.Tool(
-                        name="update_content",
-                        description="""Update memory content while preserving metadata and tags.
-
-                        Example:
-                        {
-                            "content_hash": "abc123def456...",
-                            "new_content": "Updated content here"
-                        }""",
+                        name="update_memory",
+                        description="Update memory content/tags/metadata. Content updates regenerate embedding.",
                         inputSchema={
                             "type": "object",
                             "properties": {
-                                "content_hash": {
+                                "hash": {"type": "string"},
+                                "content": {
                                     "type": "string",
-                                    "description": "Content hash of the memory to update."
+                                    "description": "Optional. Regenerates embedding"
                                 },
-                                "new_content": {
-                                    "type": "string",
-                                    "description": "New content to replace the existing content."
+                                "tags": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "Optional. Replaces existing"
+                                },
+                                "metadata": {
+                                    "type": "object",
+                                    "description": "Optional. Merges with existing"
                                 }
                             },
-                            "required": ["content_hash", "new_content"]
+                            "required": ["hash"]
                         }
                     ),
                     types.Tool(
-                        name="check_database_health",
-                        description="Check database health and get statistics",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {}
-                        }
-                    ),
-                    types.Tool(
-                        name="backup_memory",
-                        description="Create a database backup with all memories and metadata. Returns backup location and statistics.",
+                        name="check_memory_health",
+                        description="Get system health and statistics.",
                         inputSchema={"type": "object", "properties": {}}
                     ),
                     types.Tool(
-                        name="update_memory_metadata",
-                        description="""Update memory metadata without recreating the entire memory entry.
-                        
-                        This provides efficient metadata updates while preserving the original
-                        memory content, embeddings, and optionally timestamps.
-                        
-                        Examples:
-                        # Add tags to a memory
-                        {
-                            "content_hash": "abc123...",
-                            "updates": {
-                                "tags": ["important", "reference", "new-tag"]
-                            }
-                        }
-                        
-                        # Update memory type and custom metadata
-                        {
-                            "content_hash": "abc123...",
-                            "updates": {
-                                "metadata": {
-                                    "priority": "high",
-                                    "due_date": "2024-01-15"
-                                }
-                            }
-                        }
-                        
-                        # Update custom fields directly
-                        {
-                            "content_hash": "abc123...",
-                            "updates": {
-                                "priority": "urgent",
-                                "status": "active"
-                            }
-                        }""",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "content_hash": {
-                                    "type": "string",
-                                    "description": "The content hash of the memory to update."
-                                },
-                                "updates": {
-                                    "type": "object",
-                                    "description": "Dictionary of metadata fields to update.",
-                                    "properties": {
-                                        "tags": {
-                                            "type": "array",
-                                            "items": {"type": "string"},
-                                            "description": "Replace existing tags with this list."
-                                        },
-                                        "metadata": {
-                                            "type": "object",
-                                            "description": "Merge custom metadata fields."
-                                        }
-                                    }
-                                },
-                                "preserve_timestamps": {
-                                    "type": "boolean",
-                                    "default": True,
-                                }
-                            },
-                            "required": ["content_hash", "updates"]
-                        }
+                        name="backup_memory",
+                        description="Create memory backup. Returns location and statistics.",
+                        inputSchema={"type": "object", "properties": {}}
                     )
                 ]
-                
-                # Add document ingestion tools
-                ingestion_tools = [
-                    types.Tool(
-                        name="ingest_document",
-                        description="""Ingest a single document file into the memory database.
-                        
-                        Supports multiple formats:
-                        - PDF files (.pdf)
-                        - Text files (.txt, .md, .markdown, .rst)
-                        - JSON files (.json)
-                        
-                        The document will be parsed, chunked intelligently, and stored
-                        as multiple memories with appropriate metadata.
-                        
-                        Example:
-                        {
-                            "file_path": "/path/to/document.pdf",
-                            "tags": ["documentation", "manual"],
-                            "chunk_size": 1000
-                        }""",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "file_path": {
-                                    "type": "string",
-                                    "description": "Path to the document file to ingest."
-                                },
-                                "tags": {
-                                    "type": "array",
-                                    "description": "Optional tags to apply to all memories created from this document.",
-                                    "default": []
-                                },
-                                "chunk_size": {
-                                    "type": "number",
-                                    "description": "Target size for text chunks in characters (default: 1000).",
-                                    "default": 1000
-                                },
-                                "chunk_overlap": {
-                                    "type": "number",
-                                    "description": "Characters to overlap between chunks (default: 200).",
-                                    "default": 200
-                                }
-                            },
-                            "required": ["file_path"]
-                        }
-                    ),
-                    types.Tool(
-                        name="ingest_directory",
-                        description="""Batch ingest all supported documents from a directory.
-                        
-                        Recursively processes all supported file types in the directory,
-                        creating memories with consistent tagging and metadata.
-                        
-                        Supported formats: PDF, TXT, MD, JSON
-                        
-                        Example:
-                        {
-                            "directory_path": "/path/to/documents",
-                            "tags": ["knowledge-base"],
-                            "recursive": true,
-                            "file_extensions": ["pdf", "md", "txt"]
-                        }""",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "directory_path": {
-                                },
-                                "tags": {
-                                    "type": "array",
-                                    "description": "Optional tags to apply to all memories created.",
-                                    "default": []
-                                },
-                                "recursive": {
-                                    "type": "boolean",
-                                    "description": "Whether to process subdirectories recursively (default: true).",
-                                    "default": True
-                                },
-                                "file_extensions": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "File extensions to process (default: all supported).",
-                                    "default": ["pdf", "txt", "md", "json"]
-                                },
-                                "chunk_size": {
-                                    "type": "number",
-                                    "description": "Target size for text chunks in characters (default: 1000).",
-                                    "default": 1000
-                                },
-                                "max_files": {
-                                    "type": "number",
-                                    "description": "Maximum number of files to process (default: 100).",
-                                    "default": 100
-                                }
-                            },
-                            "required": ["directory_path"]
-                        }
-                    )
-                ]
-                tools.extend(ingestion_tools)
-                logger.info(f"Added {len(ingestion_tools)} ingestion tools")
+
+                # Note: Document ingestion tools removed from MCP
+                # Ingestion features are now available in the admin UI for better user experience
                 
                 logger.info(f"Returning {len(tools)} tools")
                 return tools
@@ -890,23 +618,14 @@ class MemoryServer:
                     return await self.handle_get_by_hash(arguments)
                 elif name == "search_by_content":
                     return await self.handle_search_by_content(arguments)
-                elif name == "update_content":
-                    return await self.handle_update_content(arguments)
-                elif name == "check_database_health":
-                    logger.info("Calling handle_check_database_health")
-                    return await self.handle_check_database_health(arguments)
+                elif name == "update_memory":
+                    return await self.handle_update_memory(arguments)
+                elif name == "check_memory_health":
+                    logger.info("Calling handle_check_memory_health")
+                    return await self.handle_check_memory_health(arguments)
                 elif name == "backup_memory":
                     logger.info("Calling handle_backup_memory")
                     return await self.handle_backup_memory(arguments)
-                elif name == "update_memory_metadata":
-                    logger.info("Calling handle_update_memory_metadata")
-                    return await self.handle_update_memory_metadata(arguments)
-                elif name == "ingest_document":
-                    logger.info("Calling handle_ingest_document")
-                    return await self.handle_ingest_document(arguments)
-                elif name == "ingest_directory":
-                    logger.info("Calling handle_ingest_directory")
-                    return await self.handle_ingest_directory(arguments)
                 else:
                     logger.warning(f"Unknown tool requested: {name}")
                     raise ValueError(f"Unknown tool: {name}")
@@ -985,7 +704,13 @@ class MemoryServer:
 
             # Store memory
             success, message = await storage.store(memory)
-            return [types.TextContent(type="text", text=message)]
+
+            if success:
+                # Return success message with hash for reference
+                response = f"✅ {message}\nHash: {content_hash}"
+                return [types.TextContent(type="text", text=response)]
+            else:
+                return [types.TextContent(type="text", text=f"❌ {message}")]
         except Exception as e:
             logger.error(f"Error storing memory: {str(e)}\n{traceback.format_exc()}")
             return [types.TextContent(type="text", text=f"Error storing memory: {str(e)}")]
@@ -1094,60 +819,59 @@ class MemoryServer:
             return [types.TextContent(type="text", text=f"Error deleting by tag: {str(e)}")]
 
 
-    async def handle_update_memory_metadata(self, arguments: dict) -> List[types.TextContent]:
-        """Handle memory metadata update requests."""
+    async def handle_update_memory(self, arguments: dict) -> List[types.TextContent]:
+        """Handle unified memory update requests (content and/or metadata)."""
         try:
-            content_hash = arguments.get("content_hash")
-            updates = arguments.get("updates")
-            preserve_timestamps = arguments.get("preserve_timestamps", True)
-            
-            if not content_hash:
-                return [types.TextContent(type="text", text="Error: content_hash is required")]
-            
-            if not updates:
-                return [types.TextContent(type="text", text="Error: updates dictionary is required")]
-            
-            if not isinstance(updates, dict):
-                return [types.TextContent(type="text", text="Error: updates must be a dictionary")]
-            
+            hash_value = arguments.get("hash")
+            content = arguments.get("content")
+            tags = arguments.get("tags")
+            metadata = arguments.get("metadata")
+
+            if not hash_value:
+                return [types.TextContent(type="text", text="Error: hash is required")]
+
+            if content is None and tags is None and metadata is None:
+                return [types.TextContent(type="text", text="Error: At least one of content, tags, or metadata must be provided")]
+
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
-            
-            # Call the storage method
-            success, message = await storage.update_memory_metadata(
-                content_hash=content_hash,
-                updates=updates,
-                preserve_timestamps=preserve_timestamps
+
+            # Call the unified update method
+            success, message = await storage.update_memory(
+                hash=hash_value,
+                content=content,
+                tags=tags,
+                metadata=metadata
             )
-            
+
             if success:
-                logger.info(f"Successfully updated metadata for memory {content_hash}")
+                logger.info(f"Successfully updated memory {hash_value}")
                 return [types.TextContent(
-                    type="text", 
-                    text=f"Successfully updated memory metadata. {message}"
+                    type="text",
+                    text=f"✅ Successfully updated memory. {message}"
                 )]
             else:
-                logger.warning(f"Failed to update metadata for memory {content_hash}: {message}")
-                return [types.TextContent(type="text", text=f"Failed to update memory metadata: {message}")]
-                
+                logger.warning(f"Failed to update memory {hash_value}: {message}")
+                return [types.TextContent(type="text", text=f"❌ Failed to update memory: {message}")]
+
         except Exception as e:
-            error_msg = f"Error updating memory metadata: {str(e)}"
+            error_msg = f"Error updating memory: {str(e)}"
             logger.error(f"{error_msg}\n{traceback.format_exc()}")
             return [types.TextContent(type="text", text=error_msg)]
 
     async def handle_get_by_hash(self, arguments: dict) -> List[types.TextContent]:
-        content_hash = arguments.get("content_hash")
-        if not content_hash:
-            return [types.TextContent(type="text", text="Error: Content hash is required")]
-        
+        hash_value = arguments.get("hash")
+        if not hash_value:
+            return [types.TextContent(type="text", text="Error: Hash is required")]
+
         try:
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
-            
-            memory = await storage.get_by_hash(content_hash)
-            
+
+            memory = await storage.get_by_hash(hash_value)
+
             if not memory:
-                return [types.TextContent(type="text", text=f"No memory found with hash: {content_hash}")]
+                return [types.TextContent(type="text", text=f"No memory found with hash: {hash_value}")]
             
             # Format the memory information
             memory_info = [
@@ -1208,30 +932,6 @@ class MemoryServer:
             
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error in content search: {str(e)}")]
-
-    async def handle_update_content(self, arguments: dict) -> List[types.TextContent]:
-        content_hash = arguments.get("content_hash")
-        new_content = arguments.get("new_content")
-        
-        if not content_hash:
-            return [types.TextContent(type="text", text="Error: Content hash is required")]
-        
-        if not new_content:
-            return [types.TextContent(type="text", text="Error: New content is required")]
-        
-        try:
-            # Initialize storage lazily when needed
-            storage = await self._ensure_storage_initialized()
-            
-            success, message = await storage.update_content(content_hash, new_content)
-            
-            if success:
-                return [types.TextContent(type="text", text=f"✅ {message}")]
-            else:
-                return [types.TextContent(type="text", text=f"❌ {message}")]
-                
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error updating content: {str(e)}")]
 
     async def handle_recall_memory(self, arguments: dict) -> List[types.TextContent]:
         """
@@ -1338,9 +1038,9 @@ class MemoryServer:
             logger.error(f"Error in recall_memory: {str(e)}\n{traceback.format_exc()}")
             return [types.TextContent(type="text", text=f"Error recalling memories: {str(e)}")]
 
-    async def handle_check_database_health(self, arguments: dict) -> List[types.TextContent]:
-        """Handle database health check requests with performance metrics."""
-        logger.info("=== EXECUTING CHECK_DATABASE_HEALTH ===")
+    async def handle_check_memory_health(self, arguments: dict) -> List[types.TextContent]:
+        """Handle memory health check requests with performance metrics."""
+        logger.info("=== EXECUTING CHECK_MEMORY_HEALTH ===")
         try:
             # Initialize storage lazily when needed
             try:
