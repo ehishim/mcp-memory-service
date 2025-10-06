@@ -232,15 +232,8 @@ class Memory:
             if "timestamp_str" in data and created_at_iso is None:
                 created_at_iso = data["timestamp_str"]
         
-        # Create metadata dictionary without special fields
-        metadata = {
-            k: v for k, v in data.items()
-            if k not in [
-                "content", "content_hash", "tags_str",
-                "timestamp", "timestamp_float", "timestamp_str",
-                "created_at", "created_at_iso", "updated_at", "updated_at_iso"
-            ]
-        }
+        # Extract metadata field directly (don't build from remaining fields)
+        metadata = data.get("metadata", {})
 
         # Create memory instance with synchronized timestamps
         return cls(
