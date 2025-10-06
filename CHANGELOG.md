@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - Admin UI Complete Integration (2025-01-06)
+
+#### Admin UI HTTP MCP Client Fixes
+- **Fixed** asyncio event loop handling for Streamlit compatibility
+  - Replaced all `asyncio.run()` calls with `run_async()` helper
+  - Creates/manages event loops safely within Streamlit's execution model
+  - Resolves "Event loop is closed" errors
+
+- **Fixed** aiohttp session lifecycle management
+  - Create fresh session for each operation to avoid event loop conflicts
+  - Close sessions in finally blocks after `list_tools()` and `call_tool()`
+  - Removed timeout configuration (conflicts with Streamlit event loop wrapper)
+
+- **Fixed** API response field mapping
+  - Map API `hash` field to internal `content_hash` field
+  - Maintains clean separation: API uses short names, internal uses descriptive names
+
+- **Fixed** ISO timestamp parsing
+  - Added `_parse_iso_timestamp()` static method to Memory model
+  - Converts ISO string timestamps from API to float timestamps
+  - Handles `created_at` and `updated_at` fields automatically
+
+- **Fixed** metadata field extraction
+  - Changed from building metadata from remaining fields to direct extraction
+  - `metadata = data.get("metadata", {})` instead of filtering all fields
+  - Prevents API fields (hash, tags) from leaking into metadata
+
+#### Admin UI Configuration
+- **Added** Bearer token authentication support
+  - `run_admin.sh` now supports `-s` (server URL) and `-a` (auth token) flags
+  - Environment variables: `MCP_SERVER_URL` and `MCP_AUTH_TOKEN`
+  - Password-masked token input in UI
+  - Authorization header automatically added to all requests
+
+- **Added** SSE (Server-Sent Events) response parsing
+  - MCP over HTTP requires SSE format responses
+  - Client parses `data:` field from SSE responses
+  - Accept header includes both `application/json` and `text/event-stream`
+
+#### MCP Server Response Format Cleanup
+- **Refactored** `store_memory` to return consistent JSON
+  - Before: Plain text `✅ Message\nHash: abc123`
+  - After: JSON `{"success": true, "hash": "abc123"}`
+  - Updated tool description: "Returns hash of the created memory"
+
+- **Cleaned** error response format
+  - Removed redundant `"data": null` field
+  - Error responses now: `{"success": false, "error": "message"}`
+  - Consistent across all tools
+
+#### Files Modified
+- `src/admin/ui.py` - Event loop handling, session management
+- `src/admin/mcp_client.py` - Field mapping, session lifecycle, SSE parsing
+- `run_admin.sh` - CLI flags for server URL and auth token
+- `src/mcp_memory_service/models/memory.py` - ISO timestamp parsing, metadata extraction
+- `src/mcp_memory_service/server.py` - store_memory JSON response
+- `src/mcp_memory_service/utils/json_response.py` - Error response cleanup
+
+---
+
 ### Added - Phase 5: Installation Scripts Separation (COMPLETED 2025-10-06)
 
 #### New Installation Script
