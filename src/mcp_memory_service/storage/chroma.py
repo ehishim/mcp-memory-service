@@ -478,32 +478,33 @@ class ChromaMemoryStorage(MemoryStorage):
                 error_msg = "Collection not initialized, cannot store memory"
                 logger.error(error_msg)
                 return False, error_msg
-                
-            # Check for duplicates
+
+            # Check for duplicates by hash (not by ID)
             existing = self.collection.get(
-                where={"content_hash": memory.content_hash}
+                where={"hash": memory.content_hash}
             )
             if existing["ids"]:
-                return False, "Duplicate content detected"
-            
+                # Return existing ID when duplicate found
+                return False, f"Duplicate content detected (existing ID: {existing['ids'][0]})"
+
             # Format metadata using optimized method
             metadata = self._optimize_metadata_for_chroma(memory)
-            
+
             # Add additional metadata
             metadata.update(memory.metadata)
 
-            # Generate ID based on content hash
-            memory_id = memory.content_hash
-            
+            # Use the memory's UUID as the ChromaDB ID
+            memory_id = memory.id
+
             # Add to collection - embedding will be automatically generated
             self.collection.add(
                 documents=[memory.content],
                 metadatas=[metadata],
                 ids=[memory_id]
             )
-            
+
             return True, f"Successfully stored memory with ID: {memory_id}"
-            
+
         except Exception as e:
             error_msg = f"Error storing memory: {str(e)}"
             logger.error(error_msg)
@@ -513,31 +514,33 @@ class ChromaMemoryStorage(MemoryStorage):
         """Batch store operation for improved performance."""
         if not memories:
             return []
-        
+
         try:
             documents = []
             metadatas = []
             ids = []
             results = []
-            
+            seen_hashes = set()
+
             for memory in memories:
-                # Check for duplicates in batch
-                if memory.content_hash not in ids:
-                    # Check existing in database
+                # Check for duplicates in batch by hash
+                if memory.content_hash not in seen_hashes:
+                    # Check existing in database by hash
                     existing = self.collection.get(
-                        where={"content_hash": memory.content_hash}
+                        where={"hash": memory.content_hash}
                     )
                     if existing["ids"]:
-                        results.append((False, f"Duplicate content detected: {memory.content_hash}"))
+                        results.append((False, f"Duplicate content detected: {memory.content_hash} (existing ID: {existing['ids'][0]})"))
                         continue
-                    
+
                     documents.append(memory.content)
                     metadatas.append(self._optimize_metadata_for_chroma(memory))
-                    ids.append(memory.content_hash)
-                    results.append((True, f"Queued for batch storage: {memory.content_hash}"))
+                    ids.append(memory.id)
+                    seen_hashes.add(memory.content_hash)
+                    results.append((True, f"Queued for batch storage: {memory.id}"))
                 else:
                     results.append((False, f"Duplicate in batch: {memory.content_hash}"))
-            
+
             if documents:
                 # Batch add to collection
                 self.collection.add(
@@ -545,14 +548,14 @@ class ChromaMemoryStorage(MemoryStorage):
                     metadatas=metadatas,
                     ids=ids
                 )
-                
+
                 # Update success messages
                 for i, (success, msg) in enumerate(results):
                     if success and "Queued for batch storage" in msg:
                         results[i] = (True, f"Successfully stored in batch: {ids[i % len(ids)]}")
-            
+
             return results
-                
+
         except Exception as e:
             error_msg = f"Error in batch store: {str(e)}"
             logger.error(error_msg)
@@ -585,10 +588,11 @@ class ChromaMemoryStorage(MemoryStorage):
                         created_at_iso = memory_meta.get("created_at_iso") or memory_meta.get("timestamp_str")
                         updated_at = memory_meta.get("updated_at") or created_at
                         updated_at_iso = memory_meta.get("updated_at_iso") or created_at_iso
-                        
+
                         memory = Memory(
+                            id=results["ids"][i],
                             content=doc,
-                            content_hash=memory_meta["content_hash"],
+                            content_hash=memory_meta["hash"],
                             tags=stored_tags,
                             # Restore timestamps with fallback logic
                             created_at=created_at,
@@ -596,8 +600,8 @@ class ChromaMemoryStorage(MemoryStorage):
                             updated_at=updated_at,
                             updated_at_iso=updated_at_iso,
                             # Include additional metadata
-                            metadata={k: v for k, v in memory_meta.items() 
-                                     if k not in ["content_hash", "tags", "type", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
+                            metadata={k: v for k, v in memory_meta.items()
+                                     if k not in ["id", "hash", "tags", "type", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
                         )
                         memories.append(memory)
             
@@ -644,10 +648,11 @@ class ChromaMemoryStorage(MemoryStorage):
                         created_at_iso = memory_meta.get("created_at_iso") or memory_meta.get("timestamp_str")
                         updated_at = memory_meta.get("updated_at") or created_at
                         updated_at_iso = memory_meta.get("updated_at_iso") or created_at_iso
-                        
+
                         memory = Memory(
+                            id=results["ids"][i],
                             content=doc,
-                            content_hash=memory_meta["content_hash"],
+                            content_hash=memory_meta["hash"],
                             tags=stored_tags,
                             # Restore timestamps with fallback logic
                             created_at=created_at,
@@ -655,8 +660,8 @@ class ChromaMemoryStorage(MemoryStorage):
                             updated_at=updated_at,
                             updated_at_iso=updated_at_iso,
                             # Include additional metadata
-                            metadata={k: v for k, v in memory_meta.items() 
-                                     if k not in ["content_hash", "tags", "type", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
+                            metadata={k: v for k, v in memory_meta.items()
+                                     if k not in ["id", "hash", "tags", "type", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
                         )
                         memories.append(memory)
             
@@ -727,208 +732,126 @@ class ChromaMemoryStorage(MemoryStorage):
             logger.error(f"Error deleting memories by tag: {e}")
             return 0, f"Error deleting memories by tag: {e}"
 
-    async def delete(self, content_hash: str) -> Tuple[bool, str]:
-        """Delete a memory by its hash."""
+    async def delete(self, id: str) -> Tuple[bool, str]:
+        """Delete a memory by its ID."""
         try:
             # First check if the memory exists
             existing = self.collection.get(
-                where={"content_hash": content_hash}
+                ids=[id]
             )
-            
+
             if not existing["ids"]:
-                return False, f"No memory found with hash {content_hash}"
-            
-            # Delete the memory
+                return False, f"No memory found with ID {id}"
+
+            # Delete the memory by ID
             self.collection.delete(
-                where={"content_hash": content_hash}
+                ids=[id]
             )
-            
-            return True, f"Successfully deleted memory with hash {content_hash}"
+
+            return True, f"Successfully deleted memory with ID {id}"
         except Exception as e:
             logger.error(f"Error deleting memory: {str(e)}")
             return False, f"Error deleting memory: {str(e)}"
 
     async def cleanup_duplicates(self) -> Tuple[int, str]:
-        """Remove duplicate memories based on content hash."""
+        """Remove duplicate memories based on hash."""
         try:
             # Get all memories
             results = self.collection.get()
-            
+
             if not results["ids"]:
                 return 0, "No memories found in database"
-            
+
             # Track seen hashes and duplicates
             seen_hashes: Set[str] = set()
             duplicates = []
-            
+
             for i, metadata in enumerate(results["metadatas"]):
-                content_hash = metadata.get("content_hash")
-                if not content_hash:
+                hash_value = metadata.get("hash")
+                if not hash_value:
                     # Generate hash if missing
-                    content_hash = generate_content_hash(results["documents"][i], metadata)
-                
-                if content_hash in seen_hashes:
+                    hash_value = generate_content_hash(results["documents"][i], metadata)
+
+                if hash_value in seen_hashes:
                     duplicates.append(results["ids"][i])
                 else:
-                    seen_hashes.add(content_hash)
-            
+                    seen_hashes.add(hash_value)
+
             # Delete duplicates if found
             if duplicates:
                 self.collection.delete(
                     ids=duplicates
                 )
                 return len(duplicates), f"Successfully removed {len(duplicates)} duplicate memories"
-            
+
             return 0, "No duplicate memories found"
-            
+
         except Exception as e:
             logger.error(f"Error cleaning up duplicates: {str(e)}")
             return 0, f"Error cleaning up duplicates: {str(e)}"
     
-    async def update_memory_metadata(self, content_hash: str, updates: Dict[str, Any], preserve_timestamps: bool = True) -> Tuple[bool, str]:
-        """
-        Update memory metadata without recreating the entire memory entry.
-        
-        This method provides efficient metadata updates while preserving the original
-        memory content, embeddings, and optionally timestamps.
-        
-        Args:
-            content_hash: Hash of the memory to update
-            updates: Dictionary of metadata fields to update. Supported fields:
-                    - tags: List[str] - Replace existing tags
-                    - metadata: Dict[str, Any] - Merge with existing metadata
-                    - Any other custom metadata fields
-            preserve_timestamps: Whether to preserve original created_at timestamp
-            
-        Returns:
-            Tuple of (success, message)
-        """
+    async def get_by_id(self, id: str) -> Optional[Memory]:
+        """Get a memory by its ID."""
         try:
             # Check if collection is initialized
             if self.collection is None:
-                error_msg = "Collection not initialized, cannot update memory metadata"
-                logger.error(error_msg)
-                return False, error_msg
-            
-            # Find the memory by content hash
+                logger.error("Collection not initialized, cannot get memory by ID")
+                return None
+
+            # Find the memory by ID
             existing = self.collection.get(
-                where={"content_hash": content_hash}
+                ids=[id],
+                include=["metadatas", "documents"]
             )
-            
+
             if not existing["ids"]:
-                return False, f"Memory with hash {content_hash} not found"
-            
-            if len(existing["ids"]) > 1:
-                logger.warning(f"Multiple memories found with hash {content_hash}, updating the first one")
-            
-            # Get the first matching memory
-            memory_id = existing["ids"][0]
-            current_metadata = existing["metadatas"][0]
-            current_document = existing["documents"][0]
-            
-            # Create updated metadata by merging with current metadata
-            updated_metadata = current_metadata.copy()
-            
-            # Handle special update fields
-            if "tags" in updates:
-                tags = updates["tags"]
-                if isinstance(tags, list):
-                    updated_metadata["tags_str"] = ",".join(tags)
-                else:
-                    return False, "Tags must be provided as a list of strings"
-            
-            
-            if "metadata" in updates:
-                # Merge custom metadata
-                if isinstance(updates["metadata"], dict):
-                    updated_metadata.update(updates["metadata"])
-                else:
-                    return False, "Metadata must be provided as a dictionary"
-            
-            # Handle other custom metadata fields (excluding protected fields)
-            protected_fields = {
-                "content", "content_hash", "tags", "metadata",
-                "embedding", "created_at", "created_at_iso", "updated_at", "updated_at_iso",
-                "timestamp", "timestamp_float", "timestamp_str"
-            }
-            
-            for key, value in updates.items():
-                if key not in protected_fields:
-                    updated_metadata[key] = value
-            
-            # Update timestamps
-            import time
-            now = time.time()
-            now_iso = datetime.utcfromtimestamp(now).isoformat() + "Z"
-            
-            # Always update the updated_at timestamp
-            updated_metadata["updated_at"] = now
-            updated_metadata["updated_at_iso"] = now_iso
-            
-            # Preserve created_at timestamp unless explicitly requested not to
-            if preserve_timestamps:
-                # Keep existing created_at timestamps if they exist
-                if "created_at" not in updated_metadata and "timestamp" in current_metadata:
-                    updated_metadata["created_at"] = current_metadata["timestamp"]
-                if "created_at_iso" not in updated_metadata and "timestamp_str" in current_metadata:
-                    updated_metadata["created_at_iso"] = current_metadata["timestamp_str"]
-            else:
-                # Reset to current time if not preserving timestamps
-                updated_metadata["created_at"] = now
-                updated_metadata["created_at_iso"] = now_iso
-                updated_metadata["timestamp"] = now
-                updated_metadata["timestamp_str"] = now_iso
-            
-            # Ensure backward compatibility fields are updated
-            if "created_at" in updated_metadata:
-                updated_metadata["timestamp"] = updated_metadata["created_at"]
-                updated_metadata["timestamp_float"] = updated_metadata["created_at"]
-            if "created_at_iso" in updated_metadata:
-                updated_metadata["timestamp_str"] = updated_metadata["created_at_iso"]
-            
-            # Update the memory in ChromaDB
-            # ChromaDB requires us to update via upsert since there's no direct metadata update
-            self.collection.upsert(
-                ids=[memory_id],
-                documents=[current_document],
-                metadatas=[updated_metadata]
-                # Note: We don't include embeddings here as ChromaDB will preserve existing ones
+                return None
+
+            # Get the memory data
+            memory_meta = existing["metadatas"][0]
+            doc = existing["documents"][0]
+
+            # Parse tags
+            stored_tags = self._parse_tags_fast(memory_meta.get("tags", ""))
+
+            # Use stored timestamps or fall back to legacy timestamp field
+            created_at = memory_meta.get("created_at") or memory_meta.get("timestamp_float") or memory_meta.get("timestamp")
+            created_at_iso = memory_meta.get("created_at_iso") or memory_meta.get("timestamp_str")
+            updated_at = memory_meta.get("updated_at") or created_at
+            updated_at_iso = memory_meta.get("updated_at_iso") or created_at_iso
+
+            memory = Memory(
+                id=existing["ids"][0],
+                content=doc,
+                content_hash=memory_meta["hash"],
+                tags=stored_tags,
+                # Restore timestamps with fallback logic
+                created_at=created_at,
+                created_at_iso=created_at_iso,
+                updated_at=updated_at,
+                updated_at_iso=updated_at_iso,
+                # Include additional metadata
+                metadata={k: v for k, v in memory_meta.items()
+                         if k not in ["id", "hash", "tags", "type", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
             )
-            
-            logger.info(f"Successfully updated metadata for memory {content_hash}")
-            
-            # Create a summary of what was updated
-            updated_fields = []
-            if "tags" in updates:
-                updated_fields.append("tags")
-            if "metadata" in updates:
-                updated_fields.append("custom_metadata")
-            
-            # Add other custom fields
-            for key in updates.keys():
-                if key not in protected_fields and key not in ["tags", "metadata"]:
-                    updated_fields.append(key)
-            
-            updated_fields.append("updated_at")
-            
-            summary = f"Updated fields: {', '.join(updated_fields)}"
-            return True, summary
+
+            return memory
 
         except Exception as e:
-            error_msg = f"Error updating memory metadata: {str(e)}"
-            logger.error(error_msg)
-            traceback.print_exc()
-            return False, error_msg
+            logger.error(f"Error getting memory by ID: {str(e)}")
+            logger.error(traceback.format_exc())
+            return None
 
     async def update_memory(
         self,
-        hash: str,
+        id: str,
+        content: Optional[str] = None,
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         tags_strategy: str = "replace",
         metadata_strategy: str = "replace"
     ) -> Tuple[bool, str]:
-        """Update memory tags and/or metadata with configurable strategies."""
+        """Update memory content, tags, and/or metadata with configurable strategies."""
         try:
             if self.collection is None:
                 return False, "Collection not initialized"
@@ -939,44 +862,66 @@ class ChromaMemoryStorage(MemoryStorage):
             if metadata_strategy not in ["replace", "merge"]:
                 return False, f"Invalid metadata_strategy: {metadata_strategy}"
 
-            # Find existing memory
-            existing = self.collection.get(where={"content_hash": hash})
+            # Find existing memory by ID
+            existing = self.collection.get(
+                ids=[id],
+                include=["metadatas", "documents"]
+            )
 
             if not existing["ids"]:
-                return False, f"Memory with hash {hash} not found"
+                return False, f"Memory with ID {id} not found"
 
-            memory_id = existing["ids"][0]
             current_metadata = existing["metadatas"][0]
             current_document = existing["documents"][0]
             updated_fields = []
 
             # Prepare new metadata
             new_metadata = current_metadata.copy()
+            new_document = current_document
+
+            # Process content update
+            if content is not None:
+                new_document = content
+                updated_fields.append("content")
 
             # Process tags
-            if tags is not None:
-                current_tags_str = current_metadata.get("tags_str", "")
-                current_tags = [t.strip() for t in current_tags_str.split(",") if t.strip()] if current_tags_str else []
+            current_tags_str = current_metadata.get("tags", "")
+            current_tags = [t.strip() for t in current_tags_str.split(",") if t.strip()] if current_tags_str else []
+            new_tags = current_tags
 
+            if tags is not None:
                 if tags_strategy == "replace":
-                    new_metadata["tags_str"] = ",".join(tags)
+                    new_tags = tags
                 else:  # merge
-                    merged_tags = list(set(current_tags + tags))  # Deduplicate
-                    new_metadata["tags_str"] = ",".join(merged_tags)
+                    new_tags = list(set(current_tags + tags))  # Deduplicate
                 updated_fields.append(f"tags ({tags_strategy})")
 
-            # Process metadata
+            new_metadata["tags"] = ",".join(new_tags)
+
+            # Process metadata (extract custom metadata only)
+            custom_metadata = {k: v for k, v in current_metadata.items()
+                             if k not in {"id", "hash", "tags", "created_at", "created_at_iso", "updated_at", "updated_at_iso"}}
+
             if metadata is not None:
                 if metadata_strategy == "replace":
-                    # Preserve system fields
-                    system_fields = {"content_hash", "tags_str", "created_at", "created_at_iso", "updated_at", "updated_at_iso"}
-                    for key in system_fields:
-                        if key in new_metadata:
-                            metadata[key] = new_metadata[key]
-                    new_metadata = metadata
+                    custom_metadata = metadata
                 else:  # merge
-                    new_metadata.update(metadata)
+                    custom_metadata.update(metadata)
                 updated_fields.append(f"metadata ({metadata_strategy})")
+
+            # Recalculate hash with all updated data
+            from ..utils.hashing import generate_content_hash
+            new_hash = generate_content_hash(new_document, new_tags, custom_metadata)
+
+            # Check for duplicate hash with different ID
+            duplicate_check = self.collection.get(where={"hash": new_hash})
+            if duplicate_check["ids"] and duplicate_check["ids"][0] != id:
+                return False, f"Update would create duplicate of memory ID: {duplicate_check['ids'][0]}"
+
+            new_metadata["hash"] = new_hash
+
+            # Merge custom metadata back
+            new_metadata.update(custom_metadata)
 
             # Update timestamps
             import time
@@ -987,8 +932,8 @@ class ChromaMemoryStorage(MemoryStorage):
 
             # Upsert the updated memory
             self.collection.upsert(
-                ids=[memory_id],
-                documents=[current_document],
+                ids=[id],
+                documents=[new_document],
                 metadatas=[new_metadata]
             )
 
@@ -1071,8 +1016,9 @@ class ChromaMemoryStorage(MemoryStorage):
                         updated_at_iso = metadata.get("updated_at_iso") or created_at_iso
                         
                         memory = Memory(
+                            id=results["ids"][0][i],
                             content=results["documents"][0][i],
-                            content_hash=metadata["content_hash"],
+                            content_hash=metadata["hash"],
                             tags=tags,
                             # Restore timestamps with fallback logic
                             created_at=created_at,
@@ -1080,8 +1026,8 @@ class ChromaMemoryStorage(MemoryStorage):
                             updated_at=updated_at,
                             updated_at_iso=updated_at_iso,
                             # Include additional metadata
-                            metadata={k: v for k, v in metadata.items() 
-                                    if k not in ["content_hash", "tags", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
+                            metadata={k: v for k, v in metadata.items()
+                                    if k not in ["id", "hash", "tags", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
                         )
                         
                         # Calculate cosine similarity from distance
@@ -1121,8 +1067,9 @@ class ChromaMemoryStorage(MemoryStorage):
                 updated_at_iso = metadata.get("updated_at_iso") or created_at_iso
                 
                 memory = Memory(
+                    id=results["ids"][i],
                     content=results["documents"][i],
-                    content_hash=metadata["content_hash"],
+                    content_hash=metadata["hash"],
                     tags=tags,
                     # Restore timestamps with fallback logic
                     created_at=created_at,
@@ -1130,8 +1077,8 @@ class ChromaMemoryStorage(MemoryStorage):
                     updated_at=updated_at,
                     updated_at_iso=updated_at_iso,
                     # Include additional metadata
-                    metadata={k: v for k, v in metadata.items() 
-                             if k not in ["type", "content_hash", "tags", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
+                    metadata={k: v for k, v in metadata.items()
+                             if k not in ["id", "type", "hash", "tags", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
                 )
                 # For time-based retrieval, we don't have a relevance score
                 memory_results.append(MemoryQueryResult(memory=memory, relevance_score=None))
@@ -1180,16 +1127,17 @@ class ChromaMemoryStorage(MemoryStorage):
             updated_at=memory.updated_at,
             updated_at_iso=memory.updated_at_iso
         )
-        
+
         # Use streamlined metadata structure
         # IMPORTANT: Store timestamp as float to preserve sub-second precision
         metadata = {
-            "content_hash": memory.content_hash,
-            
+            "id": memory.id,
+            "hash": memory.content_hash,
+
             "timestamp": float(memory.created_at),  # Changed from int() to float()
             "created_at_iso": memory.created_at_iso,
         }
-        
+
         # Optimize tag storage - use comma-separated string for performance
         if memory.tags:
             if isinstance(memory.tags, list):
@@ -1201,12 +1149,12 @@ class ChromaMemoryStorage(MemoryStorage):
                 metadata["tags"] = ",".join(tags)
         else:
             metadata["tags"] = ""
-        
+
         # Add additional metadata efficiently
         for key, value in memory.metadata.items():
             if isinstance(value, (str, int, float, bool)):
                 metadata[key] = value
-        
+
         return metadata
     
     def _parse_tags_fast(self, tag_string: str) -> List[str]:
@@ -1323,8 +1271,9 @@ class ChromaMemoryStorage(MemoryStorage):
                 updated_at_iso = metadata.get("updated_at_iso") or created_at_iso
                 
                 memory = Memory(
+                    id=results["ids"][0][i],
                     content=results["documents"][0][i],
-                    content_hash=metadata["content_hash"],
+                    content_hash=metadata["hash"],
                     tags=tags,
                     # Restore timestamps with fallback logic
                     created_at=created_at,
@@ -1332,8 +1281,8 @@ class ChromaMemoryStorage(MemoryStorage):
                     updated_at=updated_at,
                     updated_at_iso=updated_at_iso,
                     # Include additional metadata
-                    metadata={k: v for k, v in metadata.items() 
-                             if k not in ["content_hash", "tags", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
+                    metadata={k: v for k, v in metadata.items()
+                             if k not in ["id", "hash", "tags", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
                 )
                 
                 # Calculate cosine similarity from distance

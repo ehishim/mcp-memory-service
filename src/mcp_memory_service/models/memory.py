@@ -30,22 +30,20 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Memory:
-    """Represents a single memory entry."""
+    """Represents a single memory entry with UUID + hash identity model."""
+    id: str  # UUID v4 - stable identifier
     content: str
-    content_hash: str
+    content_hash: str  # SHA-256 hash of content + tags + metadata
     tags: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
     embedding: Optional[List[float]] = None
-    
+
     # Timestamp fields with flexible input formats
     # Store as float and ISO8601 string for maximum compatibility
     created_at: Optional[float] = None
     created_at_iso: Optional[str] = None
     updated_at: Optional[float] = None
     updated_at_iso: Optional[str] = None
-    
-    # Legacy timestamp field (maintain for backward compatibility)
-    timestamp: datetime = field(default_factory=datetime.now)
 
     def __post_init__(self):
         """Initialize timestamps after object creation."""
@@ -165,9 +163,6 @@ class Memory:
         else:
             self.updated_at = now
             self.updated_at_iso = float_to_iso(now)
-        
-        # Update legacy timestamp field for backward compatibility
-        self.timestamp = datetime.utcfromtimestamp(self.created_at)
 
     def touch(self):
         """Update the updated_at timestamps to the current time."""
@@ -184,8 +179,9 @@ class Memory:
             updated_at=self.updated_at,
             updated_at_iso=self.updated_at_iso
         )
-        
+
         return {
+            "id": self.id,
             "content": self.content,
             "content_hash": self.content_hash,
             "tags_str": ",".join(self.tags) if self.tags else "",
@@ -204,6 +200,11 @@ class Memory:
     @classmethod
     def from_dict(cls, data: Dict[str, Any], embedding: Optional[List[float]] = None) -> 'Memory':
         """Create a Memory instance from dictionary data."""
+        # Extract id field
+        memory_id = data.get("id") or data.get("memory_id")
+        if not memory_id:
+            raise ValueError("Memory data must include 'id' or 'memory_id' field")
+
         # Handle both API format (tags: list) and database format (tags_str: string)
         if "tags" in data and isinstance(data["tags"], list):
             tags = data["tags"]  # From API/JSON response
@@ -211,7 +212,7 @@ class Memory:
             tags = data["tags_str"].split(",") if data["tags_str"] else []  # From database
         else:
             tags = []
-        
+
         # Extract timestamps with different priorities
         # First check new timestamp fields (created_at/updated_at)
         created_at = data.get("created_at")
@@ -237,12 +238,13 @@ class Memory:
 
             if "timestamp_str" in data and created_at_iso is None:
                 created_at_iso = data["timestamp_str"]
-        
+
         # Extract metadata field directly (don't build from remaining fields)
         metadata = data.get("metadata", {})
 
         # Create memory instance with synchronized timestamps
         return cls(
+            id=memory_id,
             content=data["content"],
             content_hash=data["content_hash"],
             tags=[tag for tag in tags if tag],  # Filter out empty tags

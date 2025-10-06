@@ -46,34 +46,41 @@ class MemoryStorage(ABC):
         pass
     
     @abstractmethod
-    async def delete(self, content_hash: str) -> Tuple[bool, str]:
-        """Delete a memory by its hash."""
+    async def get_by_id(self, id: str) -> Optional[Memory]:
+        """Get a memory by its ID."""
         pass
-    
+
+    @abstractmethod
+    async def delete(self, id: str) -> Tuple[bool, str]:
+        """Delete a memory by its ID."""
+        pass
+
     @abstractmethod
     async def delete_by_tag(self, tag: str) -> Tuple[int, str]:
         """Delete memories by tag. Returns (count_deleted, message)."""
         pass
-    
+
     @abstractmethod
     async def cleanup_duplicates(self) -> Tuple[int, str]:
         """Remove duplicate memories. Returns (count_removed, message)."""
         pass
-    
+
     @abstractmethod
     async def update_memory(
         self,
-        hash: str,
+        id: str,
+        content: Optional[str] = None,
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         tags_strategy: str = "replace",
         metadata_strategy: str = "replace"
     ) -> Tuple[bool, str]:
         """
-        Update memory tags and/or metadata. Hash remains unchanged.
+        Update memory content, tags, and/or metadata. ID remains stable.
 
         Args:
-            hash: Hash of the memory to update
+            id: ID of the memory to update
+            content: New content (optional - enables content editing)
             tags: Tags to apply (optional)
             metadata: Metadata to apply (optional)
             tags_strategy: "replace" (default) replaces all tags, "merge" adds to existing
@@ -83,7 +90,8 @@ class MemoryStorage(ABC):
             Tuple of (success, message)
 
         Note:
-            - Content updates not supported (use delete + store instead)
+            - Content updates are now supported (hash will be recalculated)
+            - Duplicate detection: rejects if new hash matches existing memory
             - Tags strategy controls whether to replace or merge with existing tags
             - Metadata strategy controls whether to replace or merge with existing metadata
             - updated_at timestamp is always refreshed

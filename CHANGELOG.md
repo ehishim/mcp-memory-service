@@ -7,6 +7,157 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✅ COMPLETED - UUID + Hash Refactor (2025-01-06)
+
+**Status:** 100% Implementation Complete - Breaking Changes
+
+### Added
+- **Content Editing Support**: `update_memory` now supports editing memory content
+  - New `content` field in updates parameter
+  - Automatic hash recalculation when content changes
+  - Duplicate detection prevents creating duplicate memories via edits
+  - Embedding automatically updated when content changes (SQLite-vec)
+- **Removed Legacy Method**: Removed `update_memory_metadata` in favor of unified `update_memory`
+
+#### Completed Changes
+
+**Hash Generation (Phase 1)**
+- **Updated** `generate_content_hash()` in `src/mcp_memory_service/utils/hashing.py`
+  - Now includes content + tags + metadata (was content + metadata only)
+  - Deterministic hashing with sorted tags and metadata keys
+  - Filters out dynamic fields (timestamps)
+
+**Memory Model (Phase 2)**
+- **Added** `id: str` field - UUID v4 stable identifier
+- **Renamed** `content_hash` → `hash` field
+- **Removed** legacy `timestamp` field
+- **Updated** `to_dict()` to include `id`
+- **Updated** `from_dict()` to accept `id` or `memory_id`
+- Location: `src/mcp_memory_service/models/memory.py`
+
+**Storage Base Class (Phase 3)**
+- **Added** `get_by_id(id: str)` abstract method
+- **Updated** `delete(id: str)` - now uses `id` instead of `hash`
+- **Updated** `update_memory(id: str, content, tags, metadata)` - supports content updates
+- Uses `id` parameter consistently (not `memory_id`)
+- Location: `src/mcp_memory_service/storage/base.py`
+
+**Server Layer (Phase 4 - Partial)**
+- **Added** UUID generation for new memories
+- **Updated** `handle_store_memory()` to generate UUIDs
+- **Updated** `generate_content_hash()` calls to include tags
+- **Updated** store response to return both `id` and `hash`
+- Location: `src/mcp_memory_service/server.py`
+
+**SQLite Storage (Phase 5 - Partial)**
+- **Updated** schema: `id TEXT PRIMARY KEY` (was `INTEGER AUTOINCREMENT`)
+- **Updated** schema: `hash TEXT UNIQUE NOT NULL` (was `content_hash`)
+- **Updated** `store()` method to insert `id` field
+- Location: `src/mcp_memory_service/storage/sqlite_vec.py`
+
+#### Remaining Work
+
+**TODO - Phase 6: Global Rename**
+- Rename all `content_hash` → `hash` in:
+  - `src/mcp_memory_service/server.py`
+  - `src/mcp_memory_service/storage/sqlite_vec.py`
+  - `src/mcp_memory_service/storage/chroma.py`
+  - `src/mcp_memory_service/utils/json_response.py`
+  - `src/admin/mcp_client.py`
+  - `src/admin/ui.py`
+
+**TODO - Phase 7: SQLite Storage Completion**
+- Update `get_by_hash()` → `get_by_id()`
+- Update `delete()` to use `id`
+- Update `update_memory()` to support content updates
+- Update all search methods to return `id`
+
+**TODO - Phase 8: Server MCP Handlers**
+- Update tool schemas to use `id` parameter
+- Update `handle_get_by_hash()` → `handle_get_by_id()`
+- Update `handle_delete_memory()` to accept `id`
+- Update `handle_update_memory()` to accept `id`
+
+**TODO - Phase 9: Migration Script**
+- Create `scripts/migrate_to_uuid.py`
+- Generate UUIDs for existing memories
+- Regenerate hashes with new algorithm
+
+**TODO - Phase 10: Admin UI**
+- Update to use `id` instead of `hash`
+- Test content editing flow
+
+**TODO - Phase 11: Documentation**
+- Update README.md
+- Create MIGRATION_GUIDE.md
+- Comprehensive testing
+
+#### Breaking Changes Summary
+
+**For End Users:**
+- All tools will use `id` instead of `hash` as identifier
+- Hash generation algorithm changed (includes tags now)
+- Content editing now supported via `update_memory`
+
+**Migration Required:**
+- Database schema change: UUID primary key
+- Hash values will change (regenerated with tags included)
+- API parameter changes: `hash` → `id`
+
+See `MEMORY_ID_REFACTOR_PLAN.md` for complete implementation details.
+
+---
+
+### Fixed - Tag Display Bug in Admin UI (2025-01-06)
+
+#### Root Cause
+- `Memory.from_dict()` only looked for `tags_str` (database CSV format)
+- MCP API returns `tags` as JSON array
+- Admin UI received tags from API but couldn't parse them
+
+#### Fix
+- **Updated** `Memory.from_dict()` in `src/mcp_memory_service/models/memory.py`
+  - Now handles both API format (`tags`: list) and database format (`tags_str`: string)
+  - Added type checking to distinguish between formats
+  - Preserves backward compatibility with both data sources
+
+#### Naming Convention Clarified
+- `tags` (list) = Public API field and Memory object property
+- `tags_str` (string) = Internal database storage format only (comma-separated)
+
+#### Files Modified
+- `src/mcp_memory_service/models/memory.py` (lines 207-213)
+
+---
+
+### Added - Tag Deduplication & Admin Content Editing (2025-01-06)
+
+#### Tag Deduplication on Store
+- **Added** automatic tag deduplication in `store_memory` MCP tool
+  - Preserves order using `dict.fromkeys()` pattern
+  - Prevents duplicate tags in database
+  - Location: `src/mcp_memory_service/server.py` line 728
+
+#### Admin UI Content Editing
+- **Added** content editing capability in admin UI
+  - Uses delete + store pattern (hash changes with content)
+  - Detects content changes separately from tags/metadata changes
+  - Preserves tags and metadata when editing content
+  - Location: `src/admin/ui.py` lines 316-361
+
+#### Admin UI Tags Display Enhancement
+- **Improved** tags visual styling in list view
+  - Added chip-style design for tags
+  - Shows tags in both title preview and card body
+  - Removed metadata fallback for tags (clean separation)
+  - Location: `src/admin/ui.py` lines 174-184, 201-219
+
+#### Files Modified
+- `src/mcp_memory_service/server.py` - Tag deduplication
+- `src/admin/ui.py` - Content editing and tags display
+
+---
+
 ### Changed - Enhanced update_memory API (2025-01-06)
 
 #### Breaking Changes

@@ -188,11 +188,11 @@ class SqliteVecMemoryStorage(MemoryStorage):
             
             logger.info(f"SQLite pragmas applied: {', '.join(applied_pragmas)}")
             
-            # Create regular table for memory data
+            # Create regular table for memory data (UUID + hash model)
             self.conn.execute('''
                 CREATE TABLE IF NOT EXISTS memories (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    content_hash TEXT UNIQUE NOT NULL,
+                    id TEXT PRIMARY KEY,
+                    hash TEXT UNIQUE NOT NULL,
                     content TEXT NOT NULL,
                     tags TEXT,
                     metadata TEXT,
@@ -214,7 +214,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
             ''')
             
             # Create indexes for better performance
-            self.conn.execute('CREATE INDEX IF NOT EXISTS idx_content_hash ON memories(content_hash)')
+            self.conn.execute('CREATE INDEX IF NOT EXISTS idx_hash ON memories(hash)')
             self.conn.execute('CREATE INDEX IF NOT EXISTS idx_created_at ON memories(created_at)')
             
             logger.info(f"SQLite-vec storage initialized successfully with embedding dimension: {self.embedding_dimension}")
@@ -370,19 +370,21 @@ class SqliteVecMemoryStorage(MemoryStorage):
             if not self.conn:
                 return False, "Database not initialized"
             
-            # Check for duplicates
+            # Check for duplicates by hash (deduplication)
             cursor = self.conn.execute(
-                'SELECT content_hash FROM memories WHERE content_hash = ?',
-                (memory.content_hash,)
+                'SELECT id FROM memories WHERE hash = ?',
+                (memory.hash,)
             )
-            if cursor.fetchone():
-                return False, "Duplicate content detected"
+            existing = cursor.fetchone()
+            if existing:
+                existing_id = existing[0]
+                return False, f"Duplicate content detected (existing ID: {existing_id})"
             
             # Generate and validate embedding
             try:
                 embedding = self._generate_embedding(memory.content)
             except Exception as e:
-                logger.error(f"Failed to generate embedding for memory {memory.content_hash}: {str(e)}")
+                logger.error(f"Failed to generate embedding for memory {memory.hash}: {str(e)}")
                 return False, f"Failed to generate embedding: {str(e)}"
             
             # Prepare metadata
@@ -393,11 +395,12 @@ class SqliteVecMemoryStorage(MemoryStorage):
             def insert_memory():
                 cursor = self.conn.execute('''
                     INSERT INTO memories (
-                        content_hash, content, tags,
+                        id, hash, content, tags,
                         metadata, created_at, updated_at, created_at_iso, updated_at_iso
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
-                    memory.content_hash,
+                    memory.id,
+                    memory.hash,
                     memory.content,
                     tags_str,
                     metadata_str,
@@ -406,7 +409,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     memory.created_at_iso,
                     memory.updated_at_iso
                 ))
-                return cursor.lastrowid
+                # Get the rowid for the inserted row
+                return self.conn.execute('SELECT rowid FROM memories WHERE id = ?', (memory.id,)).fetchone()[0]
             
             memory_rowid = await self._execute_with_retry(insert_memory)
             
@@ -435,8 +439,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
             
             # Commit with retry logic
             await self._execute_with_retry(self.conn.commit)
-            
-            logger.info(f"Successfully stored memory: {memory.content_hash}")
+
+            logger.info(f"Successfully stored memory: {memory.hash}")
             return True, "Memory stored successfully"
             
         except Exception as e:
@@ -503,7 +507,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 k_value = actual_limit + actual_offset + 100
 
                 cursor = self.conn.execute('''
-                    SELECT m.content_hash, m.content, m.tags, m.metadata,
+                    SELECT m.id, m.hash, m.content, m.tags, m.metadata,
                            m.created_at, m.updated_at, m.created_at_iso, m.updated_at_iso,
                            e.distance
                     FROM memories m
@@ -533,8 +537,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
             for row in search_results:
                 try:
                     # Parse row data
-                    content_hash, content, tags_str, metadata_str = row[:4]
-                    created_at, updated_at, created_at_iso, updated_at_iso, distance = row[4:]
+                    id_val, hash_val, content, tags_str, metadata_str = row[:5]
+                    created_at, updated_at, created_at_iso, updated_at_iso, distance = row[5:]
 
                     # Parse tags and metadata
                     tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
@@ -542,8 +546,9 @@ class SqliteVecMemoryStorage(MemoryStorage):
 
                     # Create Memory object
                     memory = Memory(
+                        id=id_val,
                         content=content,
-                        content_hash=content_hash,
+                        hash=hash_val,
                         tags=tags,
                         metadata=metadata,
                         created_at=created_at,
@@ -588,26 +593,27 @@ class SqliteVecMemoryStorage(MemoryStorage):
             tag_params = [f"%{tag}%" for tag in tags]
             
             cursor = self.conn.execute(f'''
-                SELECT content_hash, content, tags, metadata,
+                SELECT id, hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories
                 WHERE {tag_conditions}
                 ORDER BY created_at DESC
             ''', tag_params)
-            
+
             results = []
             for row in cursor.fetchall():
                 try:
-                    content_hash, content, tags_str, metadata_str = row[:4]
-                    created_at, updated_at, created_at_iso, updated_at_iso = row[4:]
-                    
+                    id_val, hash_val, content, tags_str, metadata_str = row[:5]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+
                     # Parse tags and metadata
                     memory_tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
                     metadata = json.loads(metadata_str) if metadata_str else {}
-                    
+
                     memory = Memory(
+                        id=id_val,
                         content=content,
-                        content_hash=content_hash,
+                        hash=hash_val,
                         tags=memory_tags,
                         metadata=metadata,
                         created_at=created_at,
@@ -615,7 +621,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         created_at_iso=created_at_iso,
                         updated_at_iso=updated_at_iso
                     )
-                    
+
                     results.append(memory)
                     
                 except Exception as parse_error:
@@ -673,7 +679,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
 
             # Build main query with pagination
             query = f'''
-                SELECT content_hash, content, tags, metadata,
+                SELECT id, hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories
                 WHERE {tag_conditions}
@@ -693,15 +699,16 @@ class SqliteVecMemoryStorage(MemoryStorage):
             results = []
             for row in cursor.fetchall():
                 try:
-                    content_hash, content, tags_str, metadata_str, created_at, updated_at, created_at_iso, updated_at_iso = row
+                    id_val, hash_val, content, tags_str, metadata_str, created_at, updated_at, created_at_iso, updated_at_iso = row
 
                     # Parse tags and metadata
                     memory_tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
                     metadata = json.loads(metadata_str) if metadata_str else {}
 
                     memory = Memory(
+                        id=id_val,
                         content=content,
-                        content_hash=content_hash,
+                        hash=hash_val,
                         tags=memory_tags,
                         metadata=metadata,
                         created_at=created_at,
@@ -724,62 +731,63 @@ class SqliteVecMemoryStorage(MemoryStorage):
             logger.error(traceback.format_exc())
             return [], 0
     
-    async def delete(self, content_hash: str) -> Tuple[bool, str]:
-        """Delete a memory by its content hash."""
+    async def delete(self, id: str) -> Tuple[bool, str]:
+        """Delete a memory by its ID."""
         try:
             if not self.conn:
                 return False, "Database not initialized"
-            
-            # Get the id first to delete corresponding embedding
-            cursor = self.conn.execute('SELECT id FROM memories WHERE content_hash = ?', (content_hash,))
+
+            # Get the rowid first to delete corresponding embedding
+            cursor = self.conn.execute('SELECT rowid FROM memories WHERE id = ?', (id,))
             row = cursor.fetchone()
-            
+
             if row:
-                memory_id = row[0]
+                rowid = row[0]
                 # Delete from both tables
-                self.conn.execute('DELETE FROM memory_embeddings WHERE rowid = ?', (memory_id,))
-                cursor = self.conn.execute('DELETE FROM memories WHERE content_hash = ?', (content_hash,))
+                self.conn.execute('DELETE FROM memory_embeddings WHERE rowid = ?', (rowid,))
+                cursor = self.conn.execute('DELETE FROM memories WHERE id = ?', (id,))
                 self.conn.commit()
             else:
-                return False, f"Memory with hash {content_hash} not found"
-            
+                return False, f"Memory with ID {id} not found"
+
             if cursor.rowcount > 0:
-                logger.info(f"Deleted memory: {content_hash}")
-                return True, f"Successfully deleted memory {content_hash}"
+                logger.info(f"Deleted memory: {id}")
+                return True, f"Successfully deleted memory {id}"
             else:
-                return False, f"Memory with hash {content_hash} not found"
-                
+                return False, f"Memory with ID {id} not found"
+
         except Exception as e:
             error_msg = f"Failed to delete memory: {str(e)}"
             logger.error(error_msg)
             return False, error_msg
     
-    async def get_by_hash(self, content_hash: str) -> Optional[Memory]:
-        """Get a memory by its content hash."""
+    async def get_by_id(self, id: str) -> Optional[Memory]:
+        """Get a memory by its ID."""
         try:
             if not self.conn:
                 return None
-            
+
             cursor = self.conn.execute('''
-                SELECT content_hash, content, tags, metadata,
+                SELECT id, hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
-                FROM memories WHERE content_hash = ?
-            ''', (content_hash,))
-            
+                FROM memories WHERE id = ?
+            ''', (id,))
+
             row = cursor.fetchone()
             if not row:
                 return None
-            
-            content_hash, content, tags_str, metadata_str = row[:4]
-            created_at, updated_at, created_at_iso, updated_at_iso = row[4:]
-            
+
+            id_val, hash_val, content, tags_str, metadata_str = row[:5]
+            created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+
             # Parse tags and metadata
             tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
             metadata = json.loads(metadata_str) if metadata_str else {}
-            
+
             memory = Memory(
+                id=id_val,
                 content=content,
-                content_hash=content_hash,
+                hash=hash_val,
                 tags=tags,
                 metadata=metadata,
                 created_at=created_at,
@@ -787,11 +795,11 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 created_at_iso=created_at_iso,
                 updated_at_iso=updated_at_iso
             )
-            
+
             return memory
-            
+
         except Exception as e:
-            logger.error(f"Failed to get memory by hash {content_hash}: {str(e)}")
+            logger.error(f"Failed to get memory by ID {id}: {str(e)}")
             return None
     
     async def delete_by_tag(self, tags: List[str], match_all: bool = False) -> Tuple[int, str]:
@@ -865,9 +873,9 @@ class SqliteVecMemoryStorage(MemoryStorage):
             cursor = self.conn.execute('''
                 DELETE FROM memories 
                 WHERE rowid NOT IN (
-                    SELECT MIN(rowid) 
-                    FROM memories 
-                    GROUP BY content_hash
+                    SELECT MIN(rowid)
+                    FROM memories
+                    GROUP BY hash
                 )
             ''')
             self.conn.commit()
@@ -940,117 +948,37 @@ class SqliteVecMemoryStorage(MemoryStorage):
             logger.error(traceback.format_exc())
             return False, error_msg, {}
 
-    async def update_memory_metadata(self, content_hash: str, updates: Dict[str, Any], preserve_timestamps: bool = True) -> Tuple[bool, str]:
-        """Update memory metadata without recreating the entire memory entry."""
-        try:
-            if not self.conn:
-                return False, "Database not initialized"
-            
-            # Get current memory
-            cursor = self.conn.execute('''
-                SELECT content, tags, metadata, created_at, created_at_iso
-                FROM memories WHERE content_hash = ?
-            ''', (content_hash,))
-            
-            row = cursor.fetchone()
-            if not row:
-                return False, f"Memory with hash {content_hash} not found"
-            
-            content, current_tags, current_metadata_str, created_at, created_at_iso = row
-            
-            # Parse current metadata
-            current_metadata = json.loads(current_metadata_str) if current_metadata_str else {}
-            
-            # Apply updates
-            new_tags = current_tags
-            new_metadata = current_metadata.copy()
-            
-            # Handle tag updates
-            if "tags" in updates:
-                if isinstance(updates["tags"], list):
-                    new_tags = ",".join(updates["tags"])
-                else:
-                    return False, "Tags must be provided as a list of strings"
-            
-            # Handle memory type updates
-            # Handle metadata updates
-            if "metadata" in updates:
-                if isinstance(updates["metadata"], dict):
-                    new_metadata.update(updates["metadata"])
-                else:
-                    return False, "Metadata must be provided as a dictionary"
-            
-            # Handle other custom fields
-            protected_fields = {
-                "content", "content_hash", "tags", "metadata",
-                "embedding", "created_at", "created_at_iso", "updated_at", "updated_at_iso"
-            }
-            
-            for key, value in updates.items():
-                if key not in protected_fields:
-                    new_metadata[key] = value
-            
-            # Update timestamps
-            now = time.time()
-            now_iso = datetime.utcfromtimestamp(now).isoformat() + "Z"
-            
-            if not preserve_timestamps:
-                created_at = now
-                created_at_iso = now_iso
-            
-            # Update the memory
-            self.conn.execute('''
-                UPDATE memories SET
-                    tags = ?, metadata = ?,
-                    updated_at = ?, updated_at_iso = ?,
-                    created_at = ?, created_at_iso = ?
-                WHERE content_hash = ?
-            ''', (new_tags, json.dumps(new_metadata),
-                now, now_iso, created_at, created_at_iso, content_hash
-            ))
-            
-            self.conn.commit()
-            
-            # Create summary of updated fields
-            updated_fields = []
-            if "tags" in updates:
-                updated_fields.append("tags")
-            if "metadata" in updates:
-                updated_fields.append("custom_metadata")
-            
-            for key in updates.keys():
-                if key not in protected_fields and key not in ["tags", "metadata"]:
-                    updated_fields.append(key)
-            
-            updated_fields.append("updated_at")
-            
-            summary = f"Updated fields: {', '.join(updated_fields)}"
-            logger.info(f"Successfully updated metadata for memory {content_hash}")
-            return True, summary
-
-        except Exception as e:
-            error_msg = f"Error updating memory metadata: {str(e)}"
-            logger.error(error_msg)
-            logger.error(traceback.format_exc())
-            return False, error_msg
-
     async def update_memory(
         self,
-        hash: str,
+        id: str,
+        content: Optional[str] = None,
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         tags_strategy: str = "replace",
         metadata_strategy: str = "replace"
     ) -> Tuple[bool, str]:
-        """Update memory tags and/or metadata with configurable strategies."""
+        """
+        Update memory content, tags, and/or metadata with hash deduplication.
+
+        Args:
+            id: Memory ID to update
+            content: New content (optional)
+            tags: New tags (optional)
+            metadata: New metadata (optional)
+            tags_strategy: "replace" or "merge"
+            metadata_strategy: "replace" or "merge"
+
+        Returns:
+            (success, message) tuple
+        """
         try:
             if not self.conn:
                 return False, "Database not initialized"
 
             # Get current memory
-            memory = await self.get_by_hash(hash)
+            memory = await self.get_by_id(id)
             if not memory:
-                return False, f"Memory with hash {hash} not found"
+                return False, f"Memory with ID {id} not found"
 
             # Validate strategies
             if tags_strategy not in ["replace", "merge"]:
@@ -1062,50 +990,92 @@ class SqliteVecMemoryStorage(MemoryStorage):
 
             # Get current state
             cursor = self.conn.execute('''
-                SELECT tags, metadata FROM memories WHERE content_hash = ?
-            ''', (hash,))
+                SELECT content, tags, metadata FROM memories WHERE id = ?
+            ''', (id,))
             row = cursor.fetchone()
 
             if not row:
-                return False, f"Memory with hash {hash} not found"
+                return False, f"Memory with ID {id} not found"
 
-            current_tags_str, current_metadata_str = row
+            current_content, current_tags_str, current_metadata_str = row
             current_tags = [t.strip() for t in current_tags_str.split(",") if t.strip()] if current_tags_str else []
             current_metadata = json.loads(current_metadata_str) if current_metadata_str else {}
 
+            # Determine new values
+            new_content = content if content is not None else current_content
+
             # Process tags
-            new_tags_str = current_tags_str
             if tags is not None:
                 if tags_strategy == "replace":
-                    new_tags_str = ",".join(tags)
+                    new_tags = tags
                 else:  # merge
-                    merged_tags = list(set(current_tags + tags))  # Deduplicate
-                    new_tags_str = ",".join(merged_tags)
+                    new_tags = list(set(current_tags + tags))  # Deduplicate
                 updated_fields.append(f"tags ({tags_strategy})")
+            else:
+                new_tags = current_tags
 
             # Process metadata
-            new_metadata = current_metadata.copy()
             if metadata is not None:
                 if metadata_strategy == "replace":
                     new_metadata = metadata
                 else:  # merge
+                    new_metadata = current_metadata.copy()
                     new_metadata.update(metadata)
                 updated_fields.append(f"metadata ({metadata_strategy})")
+            else:
+                new_metadata = current_metadata
+
+            # Track content update
+            if content is not None:
+                updated_fields.append("content")
+
+            # Generate new hash with updated data
+            from ..utils.hashing import generate_content_hash
+            new_hash = generate_content_hash(new_content, new_tags, new_metadata)
+
+            # Check for hash collision with different memory
+            existing = self.conn.execute(
+                'SELECT id FROM memories WHERE hash = ? AND id != ?',
+                (new_hash, id)
+            ).fetchone()
+
+            if existing:
+                return False, f"Update would create duplicate of memory ID: {existing[0]}"
 
             # Update database
             if updated_fields:
+                new_tags_str = ",".join(new_tags)
                 self.conn.execute('''
                     UPDATE memories SET
-                        tags = ?, metadata = ?, updated_at = ?, updated_at_iso = ?
-                    WHERE content_hash = ?
+                        content = ?, hash = ?, tags = ?, metadata = ?,
+                        updated_at = ?, updated_at_iso = ?
+                    WHERE id = ?
                 ''', (
+                    new_content,
+                    new_hash,
                     new_tags_str,
                     json.dumps(new_metadata),
                     time.time(),
                     datetime.now().isoformat() + 'Z',
-                    hash
+                    id
                 ))
                 self.conn.commit()
+
+                # Update embedding if content changed
+                if content is not None:
+                    try:
+                        embedding = self.model.encode(new_content).tolist()
+                        cursor = self.conn.execute('SELECT rowid FROM memories WHERE id = ?', (id,))
+                        row = cursor.fetchone()
+                        if row:
+                            rowid = row[0]
+                            self.conn.execute(
+                                'UPDATE vec_memories SET embedding = ? WHERE rowid = ?',
+                                (serialize_f32(embedding), rowid)
+                            )
+                            self.conn.commit()
+                    except Exception as e:
+                        logger.warning(f"Failed to update embedding: {e}")
 
             if not updated_fields:
                 return True, "No changes specified"
@@ -1210,43 +1180,44 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     
                     # Build SQL query with time filtering
                     base_query = '''
-                        SELECT m.content_hash, m.content, m.tags, m.metadata,
-                               m.created_at, m.updated_at, m.created_at_iso, m.updated_at_iso, 
+                        SELECT m.id, m.hash, m.content, m.tags, m.metadata,
+                               m.created_at, m.updated_at, m.created_at_iso, m.updated_at_iso,
                                e.distance
                         FROM memories m
                         JOIN (
-                            SELECT rowid, distance 
-                            FROM memory_embeddings 
+                            SELECT rowid, distance
+                            FROM memory_embeddings
                             WHERE content_embedding MATCH ? AND k = ?
                             ORDER BY distance
                         ) e ON m.id = e.rowid
                     '''
-                    
+
                     if time_where:
                         base_query += f" WHERE {time_where}"
 
                     base_query += " ORDER BY e.distance, m.created_at DESC"
-                    
+
                     # Prepare parameters: embedding, limit, then time filter params
                     query_params = [serialize_float32(query_embedding), n_results] + params
-                    
+
                     cursor = self.conn.execute(base_query, query_params)
-                    
+
                     results = []
                     for row in cursor.fetchall():
                         try:
                             # Parse row data
-                            content_hash, content, tags_str, metadata_str = row[:4]
-                            created_at, updated_at, created_at_iso, updated_at_iso, distance = row[4:]
-                            
+                            id_val, hash_val, content, tags_str, metadata_str = row[:5]
+                            created_at, updated_at, created_at_iso, updated_at_iso, distance = row[5:]
+
                             # Parse tags and metadata
                             tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
                             metadata = json.loads(metadata_str) if metadata_str else {}
-                            
+
                             # Create Memory object
                             memory = Memory(
+                                id=id_val,
                                 content=content,
-                                content_hash=content_hash,
+                                hash=hash_val,
                                 tags=tags,
                                 metadata=metadata,
                                 created_at=created_at,
@@ -1254,10 +1225,10 @@ class SqliteVecMemoryStorage(MemoryStorage):
                                 created_at_iso=created_at_iso,
                                 updated_at_iso=updated_at_iso
                             )
-                            
+
                             # Calculate relevance score (lower distance = higher relevance)
                             relevance_score = max(0.0, 1.0 - distance)
-                            
+
                             results.append(MemoryQueryResult(
                                 memory=memory,
                                 relevance_score=relevance_score,
@@ -1278,34 +1249,35 @@ class SqliteVecMemoryStorage(MemoryStorage):
             
             # Time-based filtering only (or fallback from failed semantic search)
             base_query = '''
-                SELECT content_hash, content, tags, metadata,
+                SELECT id, hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories
             '''
-            
+
             if time_where:
                 base_query += f" WHERE {time_where}"
-            
+
             base_query += " ORDER BY created_at DESC LIMIT ?"
-            
+
             # Add limit parameter
             params.append(n_results)
-            
+
             cursor = self.conn.execute(base_query, params)
-            
+
             results = []
             for row in cursor.fetchall():
                 try:
-                    content_hash, content, tags_str, metadata_str = row[:4]
-                    created_at, updated_at, created_at_iso, updated_at_iso = row[4:]
-                    
+                    id_val, hash_val, content, tags_str, metadata_str = row[:5]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+
                     # Parse tags and metadata
                     tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
                     metadata = json.loads(metadata_str) if metadata_str else {}
-                    
+
                     memory = Memory(
+                        id=id_val,
                         content=content,
-                        content_hash=content_hash,
+                        hash=hash_val,
                         tags=tags,
                         metadata=metadata,
                         created_at=created_at,
@@ -1313,7 +1285,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         created_at_iso=created_at_iso,
                         updated_at_iso=updated_at_iso
                     )
-                    
+
                     # For time-based retrieval, we don't have a relevance score
                     results.append(MemoryQueryResult(
                         memory=memory,
@@ -1368,7 +1340,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
             actual_offset = offset if offset is not None else 0
 
             cursor = self.conn.execute('''
-                SELECT content_hash, content, tags, metadata,
+                SELECT id, hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories
                 WHERE content LIKE ?
@@ -1379,16 +1351,17 @@ class SqliteVecMemoryStorage(MemoryStorage):
             memories = []
             for row in cursor.fetchall():
                 try:
-                    content_hash, content, tags_str, metadata_str = row[:4]
-                    created_at, updated_at, created_at_iso, updated_at_iso = row[4:]
+                    id_val, hash_val, content, tags_str, metadata_str = row[:5]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
 
                     # Parse tags and metadata
                     tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
                     metadata = json.loads(metadata_str) if metadata_str else {}
 
                     memory = Memory(
+                        id=id_val,
                         content=content,
-                        content_hash=content_hash,
+                        hash=hash_val,
                         tags=tags,
                         metadata=metadata,
                         created_at=created_at,
@@ -1409,55 +1382,55 @@ class SqliteVecMemoryStorage(MemoryStorage):
             logger.error(traceback.format_exc())
             return [], 0
     
-    async def update_content(self, content_hash: str, new_content: str) -> Tuple[bool, str]:
+    async def update_content(self, hash: str, new_content: str) -> Tuple[bool, str]:
         """Update memory content while preserving metadata and regenerating embeddings."""
         try:
             if not self.conn:
                 return False, "Database not initialized"
-            
+
             # Get current memory to preserve metadata
-            memory = await self.get_by_hash(content_hash)
+            memory = await self.get_by_hash(hash)
             if not memory:
-                return False, f"Memory with hash {content_hash} not found"
-            
-            # Generate new content hash
+                return False, f"Memory with hash {hash} not found"
+
+            # Generate new hash
             from ..utils.hashing import generate_content_hash
-            new_content_hash = generate_content_hash(new_content)
-            
+            new_hash = generate_content_hash(new_content)
+
             # Generate new embedding
             new_embedding = self._generate_embedding(new_content)
-            
+
             # Update memory table
             cursor = self.conn.execute('''
-                UPDATE memories 
-                SET content = ?, content_hash = ?, updated_at = ?, updated_at_iso = ?
-                WHERE content_hash = ?
+                UPDATE memories
+                SET content = ?, hash = ?, updated_at = ?, updated_at_iso = ?
+                WHERE hash = ?
             ''', (
-                new_content, 
-                new_content_hash, 
-                time.time(), 
+                new_content,
+                new_hash,
+                time.time(),
                 datetime.now().isoformat() + 'Z',
-                content_hash
+                hash
             ))
-            
+
             if cursor.rowcount == 0:
                 return False, "Failed to update memory content"
-            
+
             # Update embedding (get memory id first)
-            cursor = self.conn.execute('SELECT id FROM memories WHERE content_hash = ?', (new_content_hash,))
+            cursor = self.conn.execute('SELECT id FROM memories WHERE hash = ?', (new_hash,))
             row = cursor.fetchone()
-            
+
             if row:
                 memory_id = row[0]
-                # Update embedding table  
+                # Update embedding table
                 self.conn.execute('''
-                    UPDATE memory_embeddings 
+                    UPDATE memory_embeddings
                     SET content_embedding = ?
                     WHERE rowid = ?
                 ''', (serialize_float32(new_embedding), memory_id))
-            
+
             self.conn.commit()
-            return True, f"Content updated successfully. New hash: {new_content_hash}"
+            return True, f"Content updated successfully. New hash: {new_hash}"
             
         except Exception as e:
             logger.error(f"Error updating content: {str(e)}")
@@ -1477,25 +1450,26 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 return []
             
             cursor = self.conn.execute('''
-                SELECT content_hash, content, tags, metadata,
+                SELECT id, hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories
                 ORDER BY created_at DESC
             ''')
-            
+
             results = []
             for row in cursor.fetchall():
                 try:
-                    content_hash, content, tags_str, metadata_str = row[:4]
-                    created_at, updated_at, created_at_iso, updated_at_iso = row[4:]
-                    
+                    id_val, hash_val, content, tags_str, metadata_str = row[:5]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+
                     # Parse tags and metadata
                     tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
                     metadata = json.loads(metadata_str) if metadata_str else {}
-                    
+
                     memory = Memory(
+                        id=id_val,
                         content=content,
-                        content_hash=content_hash,
+                        hash=hash_val,
                         tags=tags,
                         metadata=metadata,
                         created_at=created_at,
@@ -1522,26 +1496,27 @@ class SqliteVecMemoryStorage(MemoryStorage):
         try:
             await self.initialize()
             cursor = self.conn.execute('''
-                SELECT content_hash, content, tags, metadata,
+                SELECT id, hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories
                 WHERE created_at BETWEEN ? AND ?
                 ORDER BY created_at DESC
             ''', (start_time, end_time))
-            
+
             results = []
             for row in cursor.fetchall():
                 try:
-                    content_hash, content, tags_str, metadata_str = row[:4]
-                    created_at, updated_at, created_at_iso, updated_at_iso = row[4:]
-                    
+                    id_val, hash_val, content, tags_str, metadata_str = row[:5]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+
                     # Parse tags and metadata
                     tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
                     metadata = json.loads(metadata_str) if metadata_str else {}
-                    
+
                     memory = Memory(
+                        id=id_val,
                         content=content,
-                        content_hash=content_hash,
+                        hash=hash_val,
                         tags=tags,
                         metadata=metadata,
                         created_at=created_at,
@@ -1595,21 +1570,21 @@ class SqliteVecMemoryStorage(MemoryStorage):
             await self.initialize()
             # Return recent access patterns based on updated_at timestamps
             cursor = self.conn.execute('''
-                SELECT content_hash, updated_at_iso
+                SELECT hash, updated_at_iso
                 FROM memories
                 WHERE updated_at_iso IS NOT NULL
                 ORDER BY updated_at DESC
                 LIMIT 100
             ''')
-            
+
             patterns = {}
             for row in cursor.fetchall():
-                content_hash, updated_at_iso = row
+                hash, updated_at_iso = row
                 try:
-                    patterns[content_hash] = datetime.fromisoformat(updated_at_iso.replace('Z', '+00:00'))
+                    patterns[hash] = datetime.fromisoformat(updated_at_iso.replace('Z', '+00:00'))
                 except Exception:
                     # Fallback for timestamp parsing issues
-                    patterns[content_hash] = datetime.now()
+                    patterns[hash] = datetime.now()
             
             return patterns
             
@@ -1620,13 +1595,13 @@ class SqliteVecMemoryStorage(MemoryStorage):
     def _row_to_memory(self, row) -> Optional[Memory]:
         """Convert database row to Memory object."""
         try:
-            content_hash, content, tags_str, metadata_str, created_at, updated_at, created_at_iso, updated_at_iso = row
-            
+            id_val, hash_val, content, tags_str, metadata_str, created_at, updated_at, created_at_iso, updated_at_iso = row
+
             # Parse tags (stored as comma-separated string)
             tags = []
             if tags_str:
                 tags = [t.strip() for t in tags_str.split(",") if t.strip()]
-            
+
             # Parse metadata
             metadata = {}
             if metadata_str:
@@ -1636,10 +1611,11 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         metadata = {}
                 except json.JSONDecodeError:
                     metadata = {}
-            
+
             return Memory(
+                id=id_val,
                 content=content,
-                content_hash=content_hash,
+                hash=hash_val,
                 tags=tags,
                 metadata=metadata,
                 created_at=created_at,
@@ -1668,7 +1644,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
             
             # Build query with optional limit and offset
             query = '''
-                SELECT content_hash, content, tags, metadata,
+                SELECT id, hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories
                 ORDER BY created_at DESC

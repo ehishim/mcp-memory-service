@@ -267,14 +267,14 @@ class MCPHttpClient:
 
         return memories, pagination
 
-    async def get_by_hash(self, hash: str) -> Optional[Memory]:
+    async def get_by_id(self, id: str) -> Optional[Memory]:
         """
-        Retrieve specific memory by hash
+        Retrieve specific memory by ID
 
         Returns:
             Memory object or None if not found
         """
-        result = await self.call_tool('get_by_hash', {'hash': hash})
+        result = await self.call_tool('get_memory', {'id': id})
         memories = self._parse_memories(result)
         return memories[0] if memories else None
 
@@ -312,21 +312,24 @@ class MCPHttpClient:
 
     async def update_memory(
         self,
-        hash: str,
+        id: str,
+        content: Optional[str] = None,
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         tags_strategy: str = "replace",
         metadata_strategy: str = "replace"
     ) -> Dict[str, Any]:
-        """Update memory tags/metadata with configurable strategies"""
+        """Update memory content, tags, and/or metadata with configurable strategies"""
         updates = {}
+        if content is not None:
+            updates['content'] = content
         if tags is not None:
             updates['tags'] = tags
         if metadata is not None:
             updates['metadata'] = metadata
 
         args = {
-            'hash': hash,
+            'id': id,
             'updates': updates,
             'tags_strategy': tags_strategy,
             'metadata_strategy': metadata_strategy
@@ -334,9 +337,9 @@ class MCPHttpClient:
 
         return await self.call_tool('update_memory', args)
 
-    async def delete_memory(self, hash: str | List[str]) -> Dict[str, Any]:
-        """Delete memory by hash (single or array)"""
-        return await self.call_tool('delete_memory', {'hash': hash})
+    async def delete_memory(self, id: str | List[str]) -> Dict[str, Any]:
+        """Delete memory by ID (single or array)"""
+        return await self.call_tool('delete_memory', {'id': id})
 
     async def delete_by_tag(self, tags: List[str], match_all: bool = False) -> Dict[str, Any]:
         """Delete memories by tags"""
@@ -384,9 +387,9 @@ class MCPHttpClient:
         for mem_data in memory_list:
             try:
                 if isinstance(mem_data, dict):
-                    # Map API 'hash' field to internal 'content_hash' field
-                    if "hash" in mem_data and "content_hash" not in mem_data:
-                        mem_data["content_hash"] = mem_data["hash"]
+                    # Map API 'hash' field to internal 'hash' field
+                    if "hash" in mem_data:
+                        mem_data["hash"] = mem_data["hash"]
 
                     # Ensure tags is a list
                     if "tags" in mem_data and isinstance(mem_data["tags"], str):

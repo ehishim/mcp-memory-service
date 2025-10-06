@@ -512,11 +512,11 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="delete_memory",
-                        description="Delete memory by hash. Supports single or array.",
+                        description="Delete memory by ID. Supports single or array.",
                         inputSchema={
                             "type": "object",
                             "properties": {
-                                "hash": {
+                                "id": {
                                     "oneOf": [
                                         {"type": "string"},
                                         {"type": "array", "items": {"type": "string"}}
@@ -524,7 +524,7 @@ class MemoryServer:
                                     "description": "String or array of strings"
                                 }
                             },
-                            "required": ["hash"]
+                            "required": ["id"]
                         }
                     ),
                     types.Tool(
@@ -547,14 +547,14 @@ class MemoryServer:
                         }
                     ),
                     types.Tool(
-                        name="get_by_hash",
-                        description="Retrieve specific memory by hash.",
+                        name="get_memory",
+                        description="Retrieve specific memory by ID.",
                         inputSchema={
                             "type": "object",
                             "properties": {
-                                "hash": {"type": "string"}
+                                "id": {"type": "string"}
                             },
-                            "required": ["hash"]
+                            "required": ["id"]
                         }
                     ),
                     types.Tool(
@@ -581,18 +581,22 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="update_memory",
-                        description="Update memory tags and/or metadata. Hash remains unchanged. Use delete + store for content changes.",
+                        description="Update memory content, tags, and/or metadata. ID remains unchanged.",
                         inputSchema={
                             "type": "object",
                             "properties": {
-                                "hash": {
+                                "id": {
                                     "type": "string",
-                                    "description": "Content hash of the memory to update"
+                                    "description": "Memory ID to update"
                                 },
                                 "updates": {
                                     "type": "object",
                                     "description": "Fields to update",
                                     "properties": {
+                                        "content": {
+                                            "type": "string",
+                                            "description": "New content for the memory"
+                                        },
                                         "tags": {
                                             "type": "array",
                                             "items": {"type": "string"},
@@ -617,7 +621,7 @@ class MemoryServer:
                                     "default": "replace"
                                 }
                             },
-                            "required": ["hash", "updates"]
+                            "required": ["id", "updates"]
                         }
                     ),
                     types.Tool(
@@ -663,8 +667,8 @@ class MemoryServer:
                     return await self.handle_delete_memory(arguments)
                 elif name == "delete_by_tag":
                     return await self.handle_delete_by_tag(arguments)
-                elif name == "get_by_hash":
-                    return await self.handle_get_by_hash(arguments)
+                elif name == "get_memory":
+                    return await self.handle_get_memory(arguments)
                 elif name == "search_by_content":
                     return await self.handle_search_by_content(arguments)
                 elif name == "update_memory":
@@ -742,12 +746,15 @@ class MemoryServer:
                     tags.append(source_tag)
                 final_metadata["hostname"] = hostname
 
-            # Create memory object
-            content_hash = generate_content_hash(content, final_metadata)
+            # Create memory object with UUID
+            import uuid
+            memory_id = str(uuid.uuid4())
+            hash_value = generate_content_hash(content, tags, final_metadata)
             now = time.time()
             memory = Memory(
+                id=memory_id,
                 content=content,
-                content_hash=content_hash,
+                hash=hash_value,
                 tags=tags,
                 metadata=final_metadata,
                 created_at=now,
@@ -758,9 +765,10 @@ class MemoryServer:
             success, message = await storage.store(memory)
 
             if success:
-                # Return JSON response with success status and hash
+                # Return JSON response with success status, id, and hash
                 return create_success_response({
-                    "hash": content_hash
+                    "id": memory_id,
+                    "hash": hash_value
                 })
             else:
                 return create_error_response(message)
@@ -817,35 +825,35 @@ class MemoryServer:
             return create_error_response(str(e))
 
     async def handle_delete_memory(self, arguments: dict) -> List[types.TextContent]:
-        """Delete memory by hash (single or array)."""
+        """Delete memory by ID (single or array)."""
         try:
-            hash_param = arguments.get("hash")
+            id_param = arguments.get("id")
 
-            if not hash_param:
-                return create_error_response("hash parameter is required")
+            if not id_param:
+                return create_error_response("id parameter is required")
 
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
 
-            # Handle single hash or array
-            if isinstance(hash_param, list):
+            # Handle single ID or array
+            if isinstance(id_param, list):
                 deleted_count = 0
-                for h in hash_param:
-                    success, _ = await storage.delete(h)
+                for id_val in id_param:
+                    success, _ = await storage.delete(id_val)
                     if success:
                         deleted_count += 1
 
                 response = {
                     "success": True,
                     "affected_count": deleted_count,
-                    "message": f"Deleted {deleted_count} of {len(hash_param)} memories"
+                    "message": f"Deleted {deleted_count} of {len(id_param)} memories"
                 }
             else:
-                success, message = await storage.delete(hash_param)
+                success, message = await storage.delete(id_param)
                 response = {
                     "success": success,
                     "affected_count": 1 if success else 0,
-                    "message": f"Memory {hash_param} deleted" if success else f"Failed to delete {hash_param}: {message}"
+                    "message": f"Memory {id_param} deleted" if success else f"Failed to delete {id_param}: {message}"
                 }
 
             return create_json_response(response)
@@ -886,24 +894,25 @@ class MemoryServer:
 
 
     async def handle_update_memory(self, arguments: dict) -> List[types.TextContent]:
-        """Update memory tags and/or metadata with configurable strategies."""
+        """Update memory content, tags, and/or metadata with configurable strategies."""
         try:
-            hash_value = arguments.get("hash")
+            id_value = arguments.get("id")
             updates = arguments.get("updates", {})
             tags_strategy = arguments.get("tags_strategy", "replace")
             metadata_strategy = arguments.get("metadata_strategy", "replace")
 
-            if not hash_value:
-                return create_error_response("hash parameter is required")
+            if not id_value:
+                return create_error_response("id parameter is required")
 
             if not updates:
                 return create_error_response("updates parameter is required")
 
+            content = updates.get("content")
             tags = updates.get("tags")
             metadata = updates.get("metadata")
 
-            if tags is None and metadata is None:
-                return create_error_response("At least one of tags or metadata must be provided in updates")
+            if content is None and tags is None and metadata is None:
+                return create_error_response("At least one of content, tags, or metadata must be provided in updates")
 
             # Validate strategies
             if tags_strategy not in ["replace", "merge"]:
@@ -917,7 +926,8 @@ class MemoryServer:
 
             # Perform update
             success, message = await storage.update_memory(
-                hash=hash_value,
+                id=id_value,
+                content=content,
                 tags=tags,
                 metadata=metadata,
                 tags_strategy=tags_strategy,
@@ -938,21 +948,21 @@ class MemoryServer:
             logger.error(f"Error in update_memory: {e}")
             return create_error_response(str(e))
 
-    async def handle_get_by_hash(self, arguments: dict) -> List[types.TextContent]:
-        """Retrieve single memory by hash."""
+    async def handle_get_memory(self, arguments: dict) -> List[types.TextContent]:
+        """Retrieve single memory by ID."""
         try:
-            hash_value = arguments.get("hash")
+            id_value = arguments.get("id")
 
-            if not hash_value:
-                return create_error_response("hash parameter is required")
+            if not id_value:
+                return create_error_response("id parameter is required")
 
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
 
-            memory = await storage.get_by_hash(hash_value)
+            memory = await storage.get_by_id(id_value)
 
             if not memory:
-                return create_error_response(f"Memory not found: {hash_value}")
+                return create_error_response(f"Memory not found: {id_value}")
 
             response = {
                 "success": True,
@@ -962,7 +972,7 @@ class MemoryServer:
             return create_json_response(response)
 
         except Exception as e:
-            logger.error(f"Error in get_by_hash: {e}")
+            logger.error(f"Error in get_memory: {e}")
             return create_error_response(str(e))
 
     async def handle_search_by_content(self, arguments: dict) -> List[types.TextContent]:
@@ -1363,10 +1373,12 @@ class MemoryServer:
                     if chunk.metadata.get('tags'):
                         all_tags.extend(chunk.metadata['tags'])
                     
-                    # Create memory object
+                    # Create memory object with UUID
+                    import uuid
                     memory = Memory(
+                        id=str(uuid.uuid4()),
                         content=chunk.content,
-                        content_hash=generate_content_hash(chunk.content, chunk.metadata),
+                        hash=generate_content_hash(chunk.content, list(set(all_tags)), chunk.metadata),
                         tags=list(set(all_tags)),  # Remove duplicates
                         metadata=chunk.metadata
                     )
@@ -1506,10 +1518,12 @@ class MemoryServer:
                             if chunk.metadata.get('tags'):
                                 all_tags.extend(chunk.metadata['tags'])
                             
-                            # Create memory object
+                            # Create memory object with UUID
+                            import uuid
                             memory = Memory(
+                                id=str(uuid.uuid4()),
                                 content=chunk.content,
-                                content_hash=generate_content_hash(chunk.content, chunk.metadata),
+                                hash=generate_content_hash(chunk.content, list(set(all_tags)), chunk.metadata),
                                 tags=list(set(all_tags)),  # Remove duplicates
                                 metadata=chunk.metadata
                             )

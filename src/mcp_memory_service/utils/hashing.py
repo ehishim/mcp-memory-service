@@ -14,33 +14,53 @@
 
 import hashlib
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
-def generate_content_hash(content: str, metadata: Optional[Dict[str, Any]] = None) -> str:
+def generate_content_hash(
+    content: str,
+    tags: Optional[List[str]] = None,
+    metadata: Optional[Dict[str, Any]] = None
+) -> str:
     """
-    Generate a unique hash for content and metadata.
-    
-    This improved version ensures consistent hashing by:
-    1. Normalizing content (strip whitespace, lowercase)
-    2. Sorting metadata keys
-    3. Using a consistent JSON serialization
+    Generate deterministic hash including content, tags, and metadata.
+
+    Ensures consistent hashing regardless of input order:
+    1. Normalizes content (strip whitespace, lowercase)
+    2. Sorts tags alphabetically (deduplicated)
+    3. Sorts metadata keys alphabetically
+    4. Filters out dynamic fields (timestamps)
+    5. Uses consistent JSON serialization
+
+    Args:
+        content: The memory content
+        tags: Optional list of tags
+        metadata: Optional metadata dictionary
+
+    Returns:
+        SHA-256 hash as hexadecimal string
     """
     # Normalize content
     normalized_content = content.strip().lower()
-    
-    # Create hash content with normalized content
-    hash_content = normalized_content
-    
-    # Add metadata if present
+
+    # Sort and deduplicate tags
+    sorted_tags = sorted(list(set(tags))) if tags else []
+
+    # Filter and sort metadata
+    static_metadata = {}
     if metadata:
-        # Filter out timestamp and dynamic fields
         static_metadata = {
-            k: v for k, v in metadata.items() 
-            if k not in ['timestamp', 'content_hash', 'embedding']
+            k: v for k, v in sorted(metadata.items())
+            if k not in ['created_at', 'updated_at', 'created_at_iso', 'updated_at_iso',
+                        'timestamp', 'content_hash', 'embedding']
         }
-        if static_metadata:
-            # Sort keys and use consistent JSON serialization
-            hash_content += json.dumps(static_metadata, sort_keys=True, ensure_ascii=True)
-    
-    # Generate hash
-    return hashlib.sha256(hash_content.encode('utf-8')).hexdigest()
+
+    # Build hash input with all components (order-independent)
+    hash_input = {
+        "content": normalized_content,
+        "tags": sorted_tags,
+        "metadata": static_metadata
+    }
+
+    # Generate hash with consistent serialization
+    hash_str = json.dumps(hash_input, sort_keys=True, ensure_ascii=True)
+    return hashlib.sha256(hash_str.encode('utf-8')).hexdigest()

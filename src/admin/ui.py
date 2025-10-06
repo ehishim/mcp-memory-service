@@ -160,12 +160,12 @@ def display_memory_card(memory: Memory, idx: int):
         col1, col2 = st.columns([3, 1])
 
         with col1:
-            st.markdown(f'<p class="hash-text">Hash: {memory.content_hash}</p>', unsafe_allow_html=True)
+            st.markdown(f'<p class="hash-text">ID: {memory.id}</p>', unsafe_allow_html=True)
             st.markdown(f"**Created:** {format_timestamp(memory.created_at)} | **Updated:** {format_timestamp(memory.updated_at)}")
 
         with col2:
             if st.button("✏️ Edit", key=f"edit_{idx}"):
-                st.session_state.editing_hash = memory.content_hash
+                st.session_state.editing_id = memory.id
                 st.session_state.edit_content = memory.content
 
                 # Store the memory itself to keep it visible during edit
@@ -188,7 +188,7 @@ def display_memory_card(memory: Memory, idx: int):
 
             if st.button("🗑️ Delete", key=f"del_{idx}"):
                 if st.session_state.client:
-                    result = run_async(st.session_state.client.delete_memory(memory.content_hash))
+                    result = run_async(st.session_state.client.delete_memory(memory.id))
                     if result.get("success"):
                         st.success(f"✅ Deleted memory")
                         st.rerun()
@@ -226,14 +226,14 @@ def display_memory_card(memory: Memory, idx: int):
 
 def edit_memory_form():
     """Display edit form for selected memory."""
-    if 'editing_hash' not in st.session_state:
+    if 'editing_id' not in st.session_state:
         return
 
     st.divider()
     st.subheader("✏️ Edit Memory")
 
-    # Display hash for reference
-    st.markdown(f'<p class="hash-text">Hash: {st.session_state.editing_hash}</p>', unsafe_allow_html=True)
+    # Display ID for reference
+    st.markdown(f'<p class="hash-text">ID: {st.session_state.editing_id}</p>', unsafe_allow_html=True)
     st.markdown("---")
 
     # Content editor
@@ -314,7 +314,7 @@ def edit_memory_form():
                 try:
                     # Delete old memory
                     delete_result = run_async(
-                        st.session_state.client.delete_memory(st.session_state.editing_hash)
+                        st.session_state.client.delete_memory(st.session_state.editing_id)
                     )
                     if not delete_result.get("success"):
                         st.error(f"❌ Delete failed: {delete_result.get('error', 'Unknown error')}")
@@ -345,7 +345,7 @@ def edit_memory_form():
 
                 result = run_async(
                     st.session_state.client.update_memory(
-                        st.session_state.editing_hash,
+                        st.session_state.editing_id,
                         **update_params
                     )
                 )
@@ -357,14 +357,14 @@ def edit_memory_form():
                 st.info("ℹ️ No changes detected")
 
             # Clear edit state
-            del st.session_state.editing_hash
+            del st.session_state.editing_id
             if 'editing_memory' in st.session_state:
                 del st.session_state.editing_memory
             st.rerun()
 
     with col2:
         if st.button("❌ Cancel"):
-            del st.session_state.editing_hash
+            del st.session_state.editing_id
             if 'editing_memory' in st.session_state:
                 del st.session_state.editing_memory
             st.rerun()
@@ -584,7 +584,7 @@ def main():
     st.divider()
 
     # Edit form (if editing)
-    if 'editing_hash' in st.session_state:
+    if 'editing_id' in st.session_state:
         edit_memory_form()
 
         # Show the memory being edited
