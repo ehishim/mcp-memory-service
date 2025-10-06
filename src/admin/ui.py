@@ -72,7 +72,7 @@ def format_timestamp(timestamp: float) -> str:
 
 def tag_editor(session_key: str = "edit_tags") -> List[str]:
     """
-    Interactive tag editor with compact chip-style UI.
+    Interactive tag editor with clean chip-style UI.
     Returns the updated list of tags.
     """
     if session_key not in st.session_state:
@@ -82,42 +82,31 @@ def tag_editor(session_key: str = "edit_tags") -> List[str]:
 
     st.markdown("**Tags:**")
 
-    # Display existing tags as inline chips with remove buttons
+    # Display existing tags as clickable chips
     if current_tags:
-        # Use columns for compact inline layout
-        cols = st.columns([0.1] + [1] * min(len(current_tags), 6))
+        # Create inline buttons - use fewer columns to prevent wrapping
+        cols = st.columns(min(len(current_tags), 4))
 
         for idx, tag in enumerate(current_tags):
-            if idx < 6:  # Show first 6 tags inline
-                with cols[idx + 1]:
-                    # Use container for tight layout
-                    if st.button(f"❌ `{tag}`", key=f"remove_tag_{session_key}_{idx}", help=f"Remove {tag}"):
-                        st.session_state[session_key].remove(tag)
-                        st.rerun()
+            col_idx = idx % 4
+            with cols[col_idx]:
+                if st.button(f"{tag} ×", key=f"remove_tag_{session_key}_{idx}", help=f"Click to remove", use_container_width=True):
+                    st.session_state[session_key].remove(tag)
+                    st.rerun()
+    else:
+        st.info("No tags yet")
 
-        # If more than 6 tags, show the rest in a compact list
-        if len(current_tags) > 6:
-            with st.expander(f"➕ {len(current_tags) - 6} more tags"):
-                for idx, tag in enumerate(current_tags[6:], start=6):
-                    col1, col2 = st.columns([4, 1])
-                    with col1:
-                        st.markdown(f'<span class="tag-chip">{tag}</span>', unsafe_allow_html=True)
-                    with col2:
-                        if st.button("❌", key=f"remove_tag_{session_key}_{idx}"):
-                            st.session_state[session_key].remove(tag)
-                            st.rerun()
-
-    # Add new tag - more compact
-    col1, col2 = st.columns([4, 1])
+    # Add new tag - simplified
+    col1, col2 = st.columns([5, 1])
     with col1:
         new_tag = st.text_input(
             "Add tag",
             key=f"new_tag_input_{session_key}",
-            placeholder="Enter tag name...",
+            placeholder="Type tag and press Enter or click Add...",
             label_visibility="collapsed"
         )
     with col2:
-        if st.button("➕ Add", key=f"add_tag_btn_{session_key}", use_container_width=True):
+        if st.button("Add", key=f"add_tag_btn_{session_key}", use_container_width=True):
             if new_tag and new_tag.strip():
                 tag = new_tag.strip()
                 if tag not in st.session_state[session_key]:
@@ -245,27 +234,43 @@ def edit_memory_form():
 
     # Metadata editor (JSON) with validation
     st.markdown("**Metadata (JSON):**")
+    st.caption("Leave empty {} for no metadata, or add custom fields")
 
     metadata_str = st.text_area(
         "metadata_json",
         value=json.dumps(st.session_state.get('edit_metadata', {}), indent=2),
-        height=200,
+        height=150,
         key="edit_metadata_input",
         label_visibility="collapsed",
-        help="Custom metadata fields only. Tags are managed separately above."
+        help="Custom metadata fields only. Tags are managed separately above. Empty {} is valid.",
+        on_change=None  # Triggers re-render on every keystroke
     )
 
-    # Real-time JSON validation
+    # Real-time JSON validation (validates as you type)
     is_valid_json = False
     parsed_metadata = {}
-    try:
-        parsed_metadata = json.loads(metadata_str)
+
+    # Trim whitespace for validation
+    metadata_str_trimmed = metadata_str.strip()
+
+    # Empty or whitespace-only is valid (treated as empty object)
+    if not metadata_str_trimmed or metadata_str_trimmed == "{}":
         is_valid_json = True
-        st.success("✅ Valid JSON")
-    except json.JSONDecodeError as e:
-        st.error(f"❌ Invalid JSON: {e.msg} at line {e.lineno}, column {e.colno}")
-    except Exception as e:
-        st.error(f"❌ Error: {str(e)}")
+        parsed_metadata = {}
+        st.success("✅ Valid (empty metadata)")
+    else:
+        try:
+            parsed_metadata = json.loads(metadata_str_trimmed)
+            is_valid_json = True
+            # Show field count
+            field_count = len(parsed_metadata.keys()) if isinstance(parsed_metadata, dict) else 0
+            st.success(f"✅ Valid JSON ({field_count} field{'s' if field_count != 1 else ''})")
+        except json.JSONDecodeError as e:
+            st.error(f"❌ Invalid JSON: {e.msg} at line {e.lineno}, column {e.colno}")
+            is_valid_json = False
+        except Exception as e:
+            st.error(f"❌ Error: {str(e)}")
+            is_valid_json = False
 
     col1, col2, col3 = st.columns([1, 1, 3])
 
