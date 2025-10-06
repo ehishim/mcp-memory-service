@@ -416,3 +416,153 @@ All UUID + hash refactoring work is **100% DONE**:
 - MEMORY_ID_REFACTOR_PLAN.md updated
 
 **System is production-ready with UUID + hash hybrid model!**
+
+---
+
+## 🔧 recall_memory Pagination Fix (2025-10-06 Continued)
+
+### Problem Discovery
+User reported recall_memory not working properly in production database. Investigation revealed multiple layered issues:
+
+**Bug #10: sqlite-vec k=10000 Limit Exceeded**
+- **File:** `src/mcp_memory_service/server.py:1082`
+- **Problem:** Pagination refactor (ac719ad) changed from using actual limit to hardcoded `n_results=10000`
+- **Impact:** sqlite-vec has maximum k=4096 limit, causing vector search to fail and fall back to time-based retrieval
+- **Result:** All 477 memories returned instead of semantically relevant results
+
+**Bug #11: Inefficient Python-Layer Pagination**
+- **Files:** `src/mcp_memory_service/server.py`, `src/mcp_memory_service/storage/sqlite_vec.py`
+- **Problem:** Pagination done in Python (`results[offset:offset+limit]`) instead of SQL
+- **Impact:**
+  - Fetched `limit + offset` rows just to throw away `offset` rows
+  - `total_count = len(results)` showed fetched count, not actual database total
+  - Wasted memory and database resources
+
+**Bug #12: Missing Relevance Score in Admin UI**
+- **Files:** `src/admin/mcp_client.py`, `src/admin/ui.py`
+- **Problem:** Relevance scores returned in JSON but lost during Memory object parsing
+- **Impact:** Admin UI couldn't show how relevant search results were
+
+### Solution Implemented
+
+#### 1. Storage Layer: Proper SQL Pagination
+**File:** `src/mcp_memory_service/storage/sqlite_vec.py`
+
+**Changes:**
+- Updated `recall()` signature to accept `limit` and `offset` parameters
+- Removed legacy `n_results` parameter (clean break, no legacy code)
+- Implemented SQL-level `LIMIT ? OFFSET ?` for both semantic and time-based queries
+- Added total count query to get actual database matches
+- Returns tuple `(results, total_count)` instead of just results
+
+**Semantic Search:**
+```python
+# Cap k at 4096 (sqlite-vec limit)
+k_value = min(4096, (limit or 100) + offset) if limit is not None else 4096
+
+# Get total count
+count_query = '''SELECT COUNT(*) FROM memories m
+                 JOIN (SELECT rowid FROM memory_embeddings 
+                       WHERE content_embedding MATCH ? AND k = ?) e
+                 ON m.rowid = e.rowid'''
+total_count = conn.execute(count_query, params).fetchone()[0]
+
+# Paginate at SQL level
+base_query += " LIMIT ? OFFSET ?"
+```
+
+**Time-Based Retrieval (Wildcard):**
+```python
+# Get total count
+total_count = conn.execute("SELECT COUNT(*) FROM memories WHERE ...").fetchone()[0]
+
+# No limit = return ALL (wildcard "*" behavior)
+if limit is not None:
+    base_query += " LIMIT ? OFFSET ?"
+```
+
+#### 2. Server Layer: Use Storage Pagination
+**File:** `src/mcp_memory_service/server.py`
+
+**Before:**
+```python
+actual_n_results = min(4096, (limit or 100) + offset)
+results = await storage.recall(query=semantic_query, n_results=actual_n_results, ...)
+total_count = len(results)  # Wrong!
+results = results[offset:offset + limit]  # Python slicing
+```
+
+**After:**
+```python
+results, total_count = await storage.recall(
+    query=semantic_query,
+    limit=limit,
+    offset=offset,
+    ...
+)
+# Pagination handled in SQL, total_count from database
+```
+
+#### 3. Admin UI: Display Relevance Scores
+**File:** `src/admin/mcp_client.py`
+
+Created `MemoryWithScore` class to preserve relevance scores:
+```python
+@dataclass
+class MemoryWithScore(Memory):
+    """Extended Memory class for admin UI that includes relevance score."""
+    relevance_score: Optional[float] = None
+```
+
+Updated `_parse_memories()` to extract and preserve scores:
+```python
+relevance_score = mem_data.pop("relevance_score", None)
+memory = Memory.from_dict(mem_data)
+if relevance_score is not None:
+    memory = MemoryWithScore(**memory.__dict__, relevance_score=relevance_score)
+```
+
+**File:** `src/admin/ui.py`
+
+Display relevance scores in memory cards:
+```python
+# Add to title
+if hasattr(memory, 'relevance_score') and memory.relevance_score is not None:
+    score_pct = memory.relevance_score * 100
+    title = f"🎯 {score_pct:.1f}% | {title}"
+
+# Show in card body
+st.markdown(f"**Relevance:** {memory.relevance_score:.4f} ({memory.relevance_score * 100:.1f}%)")
+```
+
+#### 4. Tool Documentation
+**File:** `src/mcp_memory_service/server.py`
+
+Updated recall_memory tool description:
+- Mentions 4096 limit for semantic search
+- Explains relevance_score (0.0-1.0, higher is more relevant)
+- Clarifies limit behavior
+- Added validation: `if limit > 4096: return error`
+
+### Testing Results
+```
+✅ Semantic search with limit=3: Returns 3/3 results
+✅ Semantic search with offset=3: Returns 3/6 results  
+✅ Wildcard with limit=5: Returns 5/477 results
+✅ Wildcard without limit: Returns 477/477 results (ALL)
+✅ Relevance scores: Present in all semantic search results
+```
+
+### Key Improvements
+1. **Correctness**: Returns actual total count from database, not fetched count
+2. **Efficiency**: SQL-level pagination instead of Python slicing
+3. **Semantic Search**: Works correctly with k ≤ 4096 limit
+4. **Wildcard**: `query="*"` with no limit returns ALL memories (not capped)
+5. **Admin UI**: Shows relevance scores for semantic search results
+6. **Clean Design**: No legacy parameters, MemoryWithScore only in admin layer
+
+### Commits
+- `XXXXXXX` - fix: implement proper SQL pagination in recall() with total count
+- `XXXXXXX` - feat: add relevance score display in admin UI
+- `XXXXXXX` - docs: update recall_memory tool description with 4096 limit
+

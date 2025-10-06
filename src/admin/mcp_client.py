@@ -7,10 +7,17 @@ import aiohttp
 import asyncio
 import json
 import logging
+from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 from mcp_memory_service.models.memory import Memory
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class MemoryWithScore(Memory):
+    """Extended Memory class for admin UI that includes relevance score from search results."""
+    relevance_score: Optional[float] = None
 
 
 class MCPHttpClient:
@@ -387,6 +394,9 @@ class MCPHttpClient:
         for mem_data in memory_list:
             try:
                 if isinstance(mem_data, dict):
+                    # Extract relevance_score if present (from semantic search results)
+                    relevance_score = mem_data.pop("relevance_score", None)
+
                     # Map API 'hash' field to internal 'hash' field
                     if "hash" in mem_data:
                         mem_data["hash"] = mem_data["hash"]
@@ -397,6 +407,14 @@ class MCPHttpClient:
 
                     # Create Memory object using from_dict
                     memory = Memory.from_dict(mem_data)
+
+                    # If relevance_score exists, upgrade to MemoryWithScore
+                    if relevance_score is not None:
+                        memory = MemoryWithScore(
+                            **memory.__dict__,
+                            relevance_score=relevance_score
+                        )
+
                     memories.append(memory)
 
             except Exception as e:

@@ -147,6 +147,11 @@ def display_memory_card(memory: Memory, idx: int):
     # Build expander title with content preview and tags
     title = f"📝 {memory.content[:80]}..." if len(memory.content) > 80 else f"📝 {memory.content}"
 
+    # Add relevance score to title if present (from semantic search)
+    if hasattr(memory, 'relevance_score') and memory.relevance_score is not None:
+        score_pct = memory.relevance_score * 100
+        title = f"🎯 {score_pct:.1f}% | {title}"
+
     # Add tags to title if present
     if memory.tags:
         tags_list = memory.tags if isinstance(memory.tags, list) else [t.strip() for t in memory.tags.split(",") if t.strip()]
@@ -161,6 +166,11 @@ def display_memory_card(memory: Memory, idx: int):
 
         with col1:
             st.markdown(f'<p class="hash-text">ID: {memory.id}</p>', unsafe_allow_html=True)
+
+            # Show relevance score prominently if from semantic search
+            if hasattr(memory, 'relevance_score') and memory.relevance_score is not None:
+                st.markdown(f"**Relevance:** {memory.relevance_score:.4f} ({memory.relevance_score * 100:.1f}%)")
+
             st.markdown(f"**Created:** {format_timestamp(memory.created_at)} | **Updated:** {format_timestamp(memory.updated_at)}")
 
         with col2:

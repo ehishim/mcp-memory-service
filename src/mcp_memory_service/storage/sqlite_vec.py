@@ -1137,39 +1137,51 @@ class SqliteVecMemoryStorage(MemoryStorage):
         # Return JSON string representation of the array
         return json.dumps(tags)
     
-    async def recall(self, query: Optional[str] = None, n_results: int = 5, start_timestamp: Optional[float] = None, end_timestamp: Optional[float] = None) -> List[MemoryQueryResult]:
+    async def recall(
+        self,
+        query: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        start_timestamp: Optional[float] = None,
+        end_timestamp: Optional[float] = None
+    ) -> Tuple[List[MemoryQueryResult], int]:
         """
         Retrieve memories with combined time filtering and optional semantic search.
-        
+
         Args:
             query: Optional semantic search query. If None, only time filtering is applied.
-            n_results: Maximum number of results to return.
+            limit: Maximum results to return (None = return all, capped at 4096 for semantic search).
+            offset: Number of results to skip for pagination (default 0).
             start_timestamp: Optional start time for filtering.
             end_timestamp: Optional end time for filtering.
-            
+
         Returns:
-            List of MemoryQueryResult objects.
+            Tuple of (results, total_count) where total_count is actual matches in database.
         """
         try:
             if not self.conn:
                 logger.error("Database not initialized, cannot retrieve memories")
-                return []
-            
+                return [], 0
+
+            # Set defaults
+            if offset is None:
+                offset = 0
+
             # Build time filtering WHERE clause
             time_conditions = []
             params = []
-            
+
             if start_timestamp is not None:
                 time_conditions.append("created_at >= ?")
                 params.append(float(start_timestamp))
-            
+
             if end_timestamp is not None:
                 time_conditions.append("created_at <= ?")
                 params.append(float(end_timestamp))
-            
+
             time_where = " AND ".join(time_conditions) if time_conditions else ""
-            
-            logger.info(f"Time filtering conditions: {time_where}, params: {params}")
+
+            logger.info(f"Time filtering conditions: {time_where}, limit: {limit}, offset: {offset}")
             
             # Determine whether to use semantic search or just time-based filtering
             if query and self.embedding_model:
@@ -1177,8 +1189,26 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 try:
                     # Generate query embedding
                     query_embedding = self._generate_embedding(query)
-                    
-                    # Build SQL query with time filtering
+
+                    # Cap k value at 4096 (sqlite-vec limit)
+                    k_value = min(4096, (limit or 100) + offset) if limit is not None else 4096
+
+                    # First, get total count of matching results
+                    count_query = '''
+                        SELECT COUNT(*) FROM memories m
+                        JOIN (
+                            SELECT rowid
+                            FROM memory_embeddings
+                            WHERE content_embedding MATCH ? AND k = ?
+                        ) e ON m.rowid = e.rowid
+                    '''
+                    if time_where:
+                        count_query += f" WHERE {time_where}"
+
+                    count_params = [serialize_float32(query_embedding), k_value] + params
+                    total_count = self.conn.execute(count_query, count_params).fetchone()[0]
+
+                    # Build SQL query with time filtering and pagination
                     base_query = '''
                         SELECT m.id, m.hash, m.content, m.tags, m.metadata,
                                m.created_at, m.updated_at, m.created_at_iso, m.updated_at_iso,
@@ -1197,8 +1227,12 @@ class SqliteVecMemoryStorage(MemoryStorage):
 
                     base_query += " ORDER BY e.distance, m.created_at DESC"
 
-                    # Prepare parameters: embedding, limit, then time filter params
-                    query_params = [serialize_float32(query_embedding), n_results] + params
+                    # Add LIMIT/OFFSET for pagination
+                    if limit is not None:
+                        base_query += " LIMIT ? OFFSET ?"
+                        query_params = [serialize_float32(query_embedding), k_value] + params + [limit, offset]
+                    else:
+                        query_params = [serialize_float32(query_embedding), k_value] + params
 
                     cursor = self.conn.execute(base_query, query_params)
 
@@ -1238,9 +1272,9 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         except Exception as parse_error:
                             logger.warning(f"Failed to parse memory result: {parse_error}")
                             continue
-                    
-                    logger.info(f"Retrieved {len(results)} memories for semantic query with time filter")
-                    return results
+
+                    logger.info(f"Retrieved {len(results)}/{total_count} memories for semantic query (limit={limit}, offset={offset})")
+                    return results, total_count
                     
                 except Exception as query_error:
                     logger.error(f"Error in semantic search with time filter: {str(query_error)}")
@@ -1248,6 +1282,14 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     logger.info("Falling back to time-based retrieval")
             
             # Time-based filtering only (or fallback from failed semantic search)
+            # First get total count
+            count_query = "SELECT COUNT(*) FROM memories"
+            if time_where:
+                count_query += f" WHERE {time_where}"
+
+            total_count = self.conn.execute(count_query, params).fetchone()[0]
+
+            # Build main query with pagination
             base_query = '''
                 SELECT id, hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
@@ -1257,12 +1299,17 @@ class SqliteVecMemoryStorage(MemoryStorage):
             if time_where:
                 base_query += f" WHERE {time_where}"
 
-            base_query += " ORDER BY created_at DESC LIMIT ?"
+            base_query += " ORDER BY created_at DESC"
 
-            # Add limit parameter
-            params.append(n_results)
+            # Add LIMIT/OFFSET for pagination
+            if limit is not None:
+                base_query += " LIMIT ? OFFSET ?"
+                query_params = params + [limit, offset]
+            else:
+                # No limit = return all (for wildcard "*")
+                query_params = params
 
-            cursor = self.conn.execute(base_query, params)
+            cursor = self.conn.execute(base_query, query_params)
 
             results = []
             for row in cursor.fetchall():
@@ -1296,14 +1343,14 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 except Exception as parse_error:
                     logger.warning(f"Failed to parse memory result: {parse_error}")
                     continue
-            
-            logger.info(f"Retrieved {len(results)} memories for time-based query")
-            return results
+
+            logger.info(f"Retrieved {len(results)}/{total_count} memories for time-based query (limit={limit}, offset={offset})")
+            return results, total_count
             
         except Exception as e:
             logger.error(f"Error in recall: {str(e)}")
             logger.error(traceback.format_exc())
-            return []
+            return [], 0
     
     async def search_by_content(
         self,

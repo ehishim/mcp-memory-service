@@ -462,7 +462,7 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="recall_memory",
-                        description="Semantic search with natural language time filtering and pagination support.",
+                        description="Semantic search with natural language time filtering and pagination. Returns memories ranked by relevance_score (0.0-1.0, higher is more relevant).",
                         inputSchema={
                             "type": "object",
                             "properties": {
@@ -472,11 +472,11 @@ class MemoryServer:
                                 },
                                 "limit": {
                                     "type": "integer",
-                                    "description": "Maximum results to return (optional - returns all if not specified)"
+                                    "description": "Maximum results to return (1-4096, defaults to 100 if not specified). Higher limits may affect performance."
                                 },
                                 "offset": {
                                     "type": "integer",
-                                    "description": "Number of results to skip (optional, default 0)"
+                                    "description": "Number of results to skip for pagination (optional, default 0)"
                                 }
                             },
                             "required": ["query"]
@@ -1036,11 +1036,15 @@ class MemoryServer:
             JSON response with memories and pagination metadata
         """
         query = arguments.get("query", "")
-        limit = arguments.get("limit")  # Optional - returns all if None
+        limit = arguments.get("limit")  # Optional - defaults to 100 if None
         offset = arguments.get("offset", 0)  # Default to 0
 
         if not query:
             return create_error_response("Query parameter is required")
+
+        # Validate limit doesn't exceed sqlite-vec's k limit
+        if limit is not None and limit > 4096:
+            return create_error_response("Limit cannot exceed 4096 (sqlite-vec k parameter maximum)")
 
         try:
             # Initialize storage lazily when needed
@@ -1074,28 +1078,14 @@ class MemoryServer:
             cleaned = cleaned_query.strip()
             semantic_query = None if (not cleaned or cleaned == "*") else cleaned
 
-            # Use the enhanced recall method from ChromaMemoryStorage that combines
-            # semantic search with time filtering, or just time filtering if no semantic query
-            # Fetch a large number for filtering, then paginate
-            results = await storage.recall(
+            # Call storage with proper pagination support
+            results, total_count = await storage.recall(
                 query=semantic_query,
-                n_results=10000,  # Fetch large set for time filtering
+                limit=limit,
+                offset=offset,
                 start_timestamp=start_timestamp,
                 end_timestamp=end_timestamp
             )
-
-            # Note: storage.recall doesn't yet support pagination, so we apply it here
-            # TODO: Update storage.recall to support limit/offset parameters
-            total_count = len(results) if results else 0
-
-            # Apply pagination
-            if limit is not None:
-                # Paginate: skip offset, take limit
-                results = results[offset:offset + limit]
-            elif offset > 0:
-                # Only offset specified, return all from offset onwards
-                results = results[offset:]
-            # else: return all results (no limit, no offset)
 
             # Use helper to create paginated response
             return create_paginated_response(
