@@ -16,15 +16,17 @@ logger = logging.getLogger(__name__)
 class MCPHttpClient:
     """HTTP client for MCP server communication via JSON-RPC"""
 
-    def __init__(self, base_url: str, timeout: int = 30):
+    def __init__(self, base_url: str, auth_token: Optional[str] = None, timeout: int = 30):
         """
         Initialize MCP client
 
         Args:
             base_url: MCP server URL (e.g., http://mevault:8030/mcp)
+            auth_token: Optional authorization token for Bearer authentication
             timeout: Request timeout in seconds
         """
         self.base_url = base_url.rstrip('/')
+        self.auth_token = auth_token
         self.timeout = aiohttp.ClientTimeout(total=timeout)
         self._session: Optional[aiohttp.ClientSession] = None
         self._message_id = 0
@@ -32,12 +34,18 @@ class MCPHttpClient:
     async def _ensure_session(self):
         """Ensure aiohttp session is created"""
         if self._session is None or self._session.closed:
+            headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+
+            # Add Authorization header if token provided
+            if self.auth_token:
+                headers['Authorization'] = f'Bearer {self.auth_token}'
+
             self._session = aiohttp.ClientSession(
                 timeout=self.timeout,
-                headers={
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                }
+                headers=headers
             )
 
     async def close(self):

@@ -56,13 +56,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-async def init_client(mcp_url: str):
-    """Initialize MCP HTTP client."""
-    client = MCPHttpClient(mcp_url)
+async def init_client(mcp_url: str, auth_token: str = None):
+    """Initialize MCP HTTP client with optional auth token."""
+    client = MCPHttpClient(mcp_url, auth_token=auth_token)
     success, message = await client.test_connection()
     if success:
         st.session_state.client = client
         st.session_state.mcp_url = mcp_url
+        st.session_state.auth_token = auth_token
         return True, message
     else:
         return False, message
@@ -348,9 +349,20 @@ def main():
             help="URL of the running MCP server (e.g., http://mevault:8030/mcp)"
         )
 
+        # Optional auth token from env var or user input
+        default_token = os.environ.get('MCP_AUTH_TOKEN', '')
+        auth_token = st.text_input(
+            "Authorization Token (Optional)",
+            value=st.session_state.get('auth_token', default_token),
+            type="password",
+            help="Bearer token for stateless HTTP MCP authentication"
+        )
+
         if st.button("🔌 Connect"):
             try:
-                success, message = asyncio.run(init_client(mcp_url))
+                # Only pass non-empty auth token
+                token = auth_token.strip() if auth_token else None
+                success, message = asyncio.run(init_client(mcp_url, auth_token=token))
                 if success:
                     st.success(f"✅ {message}")
                 else:
