@@ -1189,7 +1189,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
                             FROM memory_embeddings
                             WHERE content_embedding MATCH ? AND k = ?
                             ORDER BY distance
-                        ) e ON m.id = e.rowid
+                        ) e ON m.rowid = e.rowid
                     '''
 
                     if time_where:
