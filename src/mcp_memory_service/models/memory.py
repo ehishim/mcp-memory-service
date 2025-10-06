@@ -246,7 +246,7 @@ class Memory:
         return cls(
             id=memory_id,
             content=data["content"],
-            content_hash=data["content_hash"],
+            hash=data["hash"],
             tags=[tag for tag in tags if tag],  # Filter out empty tags
             metadata=metadata,
             embedding=embedding,
