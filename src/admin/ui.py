@@ -17,6 +17,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from mcp_memory_service.storage.sqlite_vec import SqliteVecMemoryStorage
 from mcp_memory_service.models.memory import Memory
+from mcp_memory_service.config import (
+    SQLITE_VEC_PATH,
+    BACKUPS_PATH,
+    STORAGE_BACKEND
+)
 
 
 # Page config
@@ -339,10 +344,11 @@ def main():
     with st.sidebar:
         st.header("⚙️ Configuration")
 
+        # Use same config as MCP server
         db_path = st.text_input(
             "Database Path",
-            value=st.session_state.get('db_path', './data/sqlite_vec.db'),
-            help="Path to SQLite database file"
+            value=st.session_state.get('db_path', SQLITE_VEC_PATH),
+            help="Path to SQLite database file (from MCP_MEMORY_SQLITE_PATH)"
         )
 
         if st.button("🔌 Connect"):
@@ -374,11 +380,10 @@ def main():
                 import asyncio
                 from datetime import datetime
                 try:
-                    # Use same backup path as MCP server
-                    backups_path = os.environ.get('MCP_MEMORY_BACKUPS_PATH', './data/backups')
+                    # Use same backup path as MCP server (from config)
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     backup_name = f"memory_backup_{timestamp}"
-                    backup_dir = os.path.join(backups_path, backup_name)
+                    backup_dir = os.path.join(BACKUPS_PATH, backup_name)
 
                     # Use storage backend's backup method (includes WAL checkpoint)
                     success, message, info = asyncio.run(
