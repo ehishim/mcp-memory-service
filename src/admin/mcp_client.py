@@ -207,7 +207,6 @@ class MCPHttpClient:
     async def recall_memory(
         self,
         query: str,
-        n_results: int = 5,
         limit: Optional[int] = None,
         offset: Optional[int] = None
     ) -> tuple[List[Memory], Dict[str, Any]]:
@@ -216,16 +215,14 @@ class MCPHttpClient:
 
         Args:
             query: Search query
-            n_results: Number of results (default 5)
-            limit: Maximum results for pagination (overrides n_results)
+            limit: Maximum results for pagination (default: 100)
             offset: Skip N results (for pagination)
 
         Returns:
             (memories, pagination_metadata) tuple
         """
         args = {
-            'query': query,
-            'n_results': n_results
+            'query': query
         }
 
         if limit is not None:

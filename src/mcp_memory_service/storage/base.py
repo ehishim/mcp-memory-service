@@ -56,8 +56,8 @@ class MemoryStorage(ABC):
         pass
 
     @abstractmethod
-    async def delete_by_tag(self, tag: str) -> Tuple[int, str]:
-        """Delete memories by tag. Returns (count_deleted, message)."""
+    async def delete_by_tag(self, tags: List[str], operation: str = "OR") -> Tuple[int, str]:
+        """Delete memories by tags with AND/OR logic. Returns (count_deleted, message)."""
         pass
 
     @abstractmethod

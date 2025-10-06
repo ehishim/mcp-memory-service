@@ -38,7 +38,7 @@ try:
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
-    print("WARNING: sentence_transformers not available. Using default embeddings.")
+    # Warning will be shown during initialization, not module import
 
 
 from .base import MemoryStorage
@@ -673,13 +673,12 @@ class ChromaMemoryStorage(MemoryStorage):
             logger.error(traceback.format_exc())
             return []
 
-    async def delete_by_tag(self, tags: List[str], match_all: bool = False) -> Tuple[int, str]:
-        """Delete memories by tags with AND/OR logic (mirrors search_by_tag).
+    async def delete_by_tag(self, tags: List[str], operation: str = "OR") -> Tuple[int, str]:
+        """Delete memories by tags with AND/OR logic (mirrors search_by_tags).
 
         Args:
             tags: List of tags to match
-            match_all: If True, memory must have ALL tags (AND logic);
-                      If False, memory needs ANY tag (OR logic)
+            operation: "AND" (all tags) or "OR" (any tag)
 
         Returns:
             Tuple of (count_deleted, message)
@@ -697,7 +696,7 @@ class ChromaMemoryStorage(MemoryStorage):
             results = self.collection.get(include=["metadatas"])
 
             ids_to_delete = []
-            operation_desc = "all tags" if match_all else "any tag"
+            operation_desc = "all tags" if operation.upper() == "AND" else "any tag"
 
             if results["ids"]:
                 for i, meta in enumerate(results["metadatas"]):
@@ -709,10 +708,10 @@ class ChromaMemoryStorage(MemoryStorage):
 
                     # Apply AND/OR logic
                     should_delete = False
-                    if match_all:
+                    if operation.upper() == "AND":
                         # ALL tags must be present (AND logic)
                         should_delete = all(tag in retrieved_tags for tag in tags_to_match)
-                    else:
+                    else:  # OR operation
                         # ANY tag present (OR logic)
                         should_delete = any(tag in retrieved_tags for tag in tags_to_match)
 

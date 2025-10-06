@@ -35,7 +35,7 @@ try:
     SQLITE_VEC_AVAILABLE = True
 except ImportError:
     SQLITE_VEC_AVAILABLE = False
-    print("WARNING: sqlite-vec not available. Install with: pip install sqlite-vec")
+    # Warning will be shown during initialization, not module import
 
 # Import sentence transformers with fallback
 try:
@@ -43,7 +43,7 @@ try:
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
-    print("WARNING: sentence_transformers not available. Install for embedding support.")
+    # Warning will be shown during initialization, not module import
 
 from .base import MemoryStorage
 from ..models.memory import Memory, MemoryQueryResult
@@ -802,13 +802,12 @@ class SqliteVecMemoryStorage(MemoryStorage):
             logger.error(f"Failed to get memory by ID {id}: {str(e)}")
             return None
     
-    async def delete_by_tag(self, tags: List[str], match_all: bool = False) -> Tuple[int, str]:
-        """Delete memories by tags with AND/OR logic (mirrors search_by_tag).
+    async def delete_by_tag(self, tags: List[str], operation: str = "OR") -> Tuple[int, str]:
+        """Delete memories by tags with AND/OR logic (mirrors search_by_tags).
 
         Args:
             tags: List of tags to match
-            match_all: If True, memory must have ALL tags (AND logic);
-                      If False, memory needs ANY tag (OR logic)
+            operation: "AND" (all tags) or "OR" (any tag)
 
         Returns:
             Tuple of (count_deleted, message)
@@ -820,12 +819,12 @@ class SqliteVecMemoryStorage(MemoryStorage):
             if not tags:
                 return 0, "No tags provided"
 
-            # Build query based on match_all (mirrors search_by_tags logic)
-            if match_all:
+            # Build query based on operation (mirrors search_by_tags logic)
+            if operation.upper() == "AND":
                 # All tags must be present (AND logic)
                 tag_conditions = " AND ".join(["tags LIKE ?" for _ in tags])
                 operation_desc = "all tags"
-            else:
+            else:  # OR operation
                 # Any tag present (OR logic)
                 tag_conditions = " OR ".join(["tags LIKE ?" for _ in tags])
                 operation_desc = "any tag"

@@ -790,10 +790,13 @@ class MemoryServer:
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
 
+            # Convert match_all boolean to operation string for storage layer
+            operation = "AND" if match_all else "OR"
+
             # Call storage with pagination
             results, total_count = await storage.search_by_tags(
                 tags=tags,
-                match_all=match_all,
+                operation=operation,
                 limit=limit,
                 offset=offset
             )
@@ -878,7 +881,10 @@ class MemoryServer:
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
 
-            deleted_count, message = await storage.delete_by_tag(tags, match_all=match_all)
+            # Convert match_all boolean to operation string for storage layer (same as search_by_tag)
+            operation = "AND" if match_all else "OR"
+
+            deleted_count, message = await storage.delete_by_tag(tags, operation=operation)
 
             response = {
                 "success": True,
