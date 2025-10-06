@@ -1037,11 +1037,12 @@ class SqliteVecMemoryStorage(MemoryStorage):
     async def update_memory(
         self,
         hash: str,
-        content: Optional[str] = None,
         tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        tags_strategy: str = "replace",
+        metadata_strategy: str = "replace"
     ) -> Tuple[bool, str]:
-        """Unified memory update method. Updates content and/or metadata."""
+        """Update memory tags and/or metadata with configurable strategies."""
         try:
             if not self.conn:
                 return False, "Database not initialized"
@@ -1051,85 +1052,65 @@ class SqliteVecMemoryStorage(MemoryStorage):
             if not memory:
                 return False, f"Memory with hash {hash} not found"
 
+            # Validate strategies
+            if tags_strategy not in ["replace", "merge"]:
+                return False, f"Invalid tags_strategy: {tags_strategy}"
+            if metadata_strategy not in ["replace", "merge"]:
+                return False, f"Invalid metadata_strategy: {metadata_strategy}"
+
             updated_fields = []
-            new_hash = hash
 
-            # Update content if provided (requires embedding regeneration)
-            if content is not None:
-                from ..utils.hashing import generate_content_hash
-                new_hash = generate_content_hash(content)
-                new_embedding = self._generate_embedding(content)
+            # Get current state
+            cursor = self.conn.execute('''
+                SELECT tags, metadata FROM memories WHERE content_hash = ?
+            ''', (hash,))
+            row = cursor.fetchone()
 
-                # Update memory table
+            if not row:
+                return False, f"Memory with hash {hash} not found"
+
+            current_tags_str, current_metadata_str = row
+            current_tags = [t.strip() for t in current_tags_str.split(",") if t.strip()] if current_tags_str else []
+            current_metadata = json.loads(current_metadata_str) if current_metadata_str else {}
+
+            # Process tags
+            new_tags_str = current_tags_str
+            if tags is not None:
+                if tags_strategy == "replace":
+                    new_tags_str = ",".join(tags)
+                else:  # merge
+                    merged_tags = list(set(current_tags + tags))  # Deduplicate
+                    new_tags_str = ",".join(merged_tags)
+                updated_fields.append(f"tags ({tags_strategy})")
+
+            # Process metadata
+            new_metadata = current_metadata.copy()
+            if metadata is not None:
+                if metadata_strategy == "replace":
+                    new_metadata = metadata
+                else:  # merge
+                    new_metadata.update(metadata)
+                updated_fields.append(f"metadata ({metadata_strategy})")
+
+            # Update database
+            if updated_fields:
                 self.conn.execute('''
-                    UPDATE memories
-                    SET content = ?, content_hash = ?, updated_at = ?, updated_at_iso = ?
+                    UPDATE memories SET
+                        tags = ?, metadata = ?, updated_at = ?, updated_at_iso = ?
                     WHERE content_hash = ?
                 ''', (
-                    content,
-                    new_hash,
+                    new_tags_str,
+                    json.dumps(new_metadata),
                     time.time(),
                     datetime.now().isoformat() + 'Z',
                     hash
                 ))
-
-                # Update embedding
-                cursor = self.conn.execute('SELECT id FROM memories WHERE content_hash = ?', (new_hash,))
-                row = cursor.fetchone()
-                if row:
-                    memory_id = row[0]
-                    self.conn.execute('''
-                        UPDATE memory_embeddings
-                        SET content_embedding = ?
-                        WHERE rowid = ?
-                    ''', (serialize_float32(new_embedding), memory_id))
-
-                updated_fields.append("content")
-                updated_fields.append("embedding")
-                hash = new_hash  # Update hash for subsequent metadata updates
-
-            # Update tags and/or metadata if provided
-            if tags is not None or metadata is not None:
-                # Get current state
-                cursor = self.conn.execute('''
-                    SELECT tags, metadata FROM memories WHERE content_hash = ?
-                ''', (hash,))
-                row = cursor.fetchone()
-
-                if row:
-                    current_tags, current_metadata_str = row
-                    current_metadata = json.loads(current_metadata_str) if current_metadata_str else {}
-
-                    # Prepare new values
-                    new_tags = ",".join(tags) if tags is not None else current_tags
-                    new_metadata = current_metadata.copy()
-                    if metadata is not None:
-                        new_metadata.update(metadata)
-
-                    # Update database
-                    self.conn.execute('''
-                        UPDATE memories SET
-                            tags = ?, metadata = ?, updated_at = ?, updated_at_iso = ?
-                        WHERE content_hash = ?
-                    ''', (
-                        new_tags,
-                        json.dumps(new_metadata),
-                        time.time(),
-                        datetime.now().isoformat() + 'Z',
-                        hash
-                    ))
-
-                    if tags is not None:
-                        updated_fields.append("tags")
-                    if metadata is not None:
-                        updated_fields.append("metadata")
-
-            self.conn.commit()
+                self.conn.commit()
 
             if not updated_fields:
                 return True, "No changes specified"
 
-            return True, f"Updated fields: {', '.join(updated_fields)}"
+            return True, f"Updated: {', '.join(updated_fields)}"
 
         except Exception as e:
             error_msg = f"Error updating memory: {str(e)}"
@@ -1641,15 +1622,10 @@ class SqliteVecMemoryStorage(MemoryStorage):
         try:
             content_hash, content, tags_str, metadata_str, created_at, updated_at, created_at_iso, updated_at_iso = row
             
-            # Parse tags
+            # Parse tags (stored as comma-separated string)
             tags = []
             if tags_str:
-                try:
-                    tags = json.loads(tags_str)
-                    if not isinstance(tags, list):
-                        tags = []
-                except json.JSONDecodeError:
-                    tags = []
+                tags = [t.strip() for t in tags_str.split(",") if t.strip()]
             
             # Parse metadata
             metadata = {}

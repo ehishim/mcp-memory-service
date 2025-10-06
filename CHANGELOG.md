@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - Enhanced update_memory API (2025-01-06)
+
+#### Breaking Changes
+- **Removed** content updates from `update_memory` tool
+  - Content updates change the hash (content-addressable design)
+  - Use `delete_memory` + `store_memory` for content changes instead
+  - Prevents confusion about hash stability
+
+#### New API Design
+- **Added** `updates` wrapper object for cleaner parameter separation
+- **Added** `tags_strategy` parameter: `"replace"` (default) | `"merge"`
+  - `"replace"`: Replaces all tags with new tags
+  - `"merge"`: Adds new tags to existing tags (deduplicated)
+- **Added** `metadata_strategy` parameter: `"replace"` (default) | `"merge"`
+  - `"replace"`: Replaces entire metadata object
+  - `"merge"`: Merges new fields with existing metadata (preserves old fields)
+
+#### New Tool Schema
+```python
+{
+    "hash": "abc123",
+    "updates": {
+        "tags": ["new-tag"],
+        "metadata": {"key": "value"}
+    },
+    "tags_strategy": "replace",      # optional, default: "replace"
+    "metadata_strategy": "replace"   # optional, default: "replace"
+}
+```
+
+#### Implementation Changes
+- **Updated** `src/mcp_memory_service/storage/base.py` - New method signature
+- **Updated** `src/mcp_memory_service/storage/sqlite_vec.py` - Strategy logic implementation
+- **Updated** `src/mcp_memory_service/storage/chroma.py` - Strategy logic implementation
+- **Updated** `src/mcp_memory_service/server.py` - Handler and tool schema
+- **Updated** `src/admin/mcp_client.py` - Client wrapper method
+
+#### Benefits
+- **Consistent**: Tags and metadata both support replace/merge strategies
+- **Predictable**: Default "replace" behavior matches user expectations
+- **Flexible**: Merge strategy available when needed
+- **Clean**: `updates` wrapper clearly separates data from parameters
+- **Content-addressable**: No content updates preserve hash stability
+
+#### Migration Guide
+**Old API (deprecated):**
+```python
+update_memory(hash="abc", tags=["tag"], metadata={"key": "val"})
+```
+
+**New API:**
+```python
+update_memory(
+    hash="abc",
+    updates={"tags": ["tag"], "metadata": {"key": "val"}},
+    tags_strategy="replace",      # optional
+    metadata_strategy="merge"     # optional
+)
+```
+
+---
+
 ### Fixed - Admin UI Complete Integration (2025-01-06)
 
 #### Admin UI HTTP MCP Client Fixes

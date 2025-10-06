@@ -581,26 +581,43 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="update_memory",
-                        description="Update memory content/tags/metadata. Content updates regenerate embedding.",
+                        description="Update memory tags and/or metadata. Hash remains unchanged. Use delete + store for content changes.",
                         inputSchema={
                             "type": "object",
                             "properties": {
-                                "hash": {"type": "string"},
-                                "content": {
+                                "hash": {
                                     "type": "string",
-                                    "description": "Optional. Regenerates embedding"
+                                    "description": "Content hash of the memory to update"
                                 },
-                                "tags": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "Optional. Replaces existing"
-                                },
-                                "metadata": {
+                                "updates": {
                                     "type": "object",
-                                    "description": "Optional. Merges with existing"
+                                    "description": "Fields to update",
+                                    "properties": {
+                                        "tags": {
+                                            "type": "array",
+                                            "items": {"type": "string"},
+                                            "description": "Tags to apply (behavior controlled by tags_strategy)"
+                                        },
+                                        "metadata": {
+                                            "type": "object",
+                                            "description": "Metadata to apply (behavior controlled by metadata_strategy)"
+                                        }
+                                    }
+                                },
+                                "tags_strategy": {
+                                    "type": "string",
+                                    "enum": ["replace", "merge"],
+                                    "description": "Tags update strategy: 'replace' (default) replaces all tags, 'merge' adds to existing tags",
+                                    "default": "replace"
+                                },
+                                "metadata_strategy": {
+                                    "type": "string",
+                                    "enum": ["replace", "merge"],
+                                    "description": "Metadata update strategy: 'replace' (default) replaces all metadata, 'merge' preserves existing fields",
+                                    "default": "replace"
                                 }
                             },
-                            "required": ["hash"]
+                            "required": ["hash", "updates"]
                         }
                     ),
                     types.Tool(
@@ -699,13 +716,16 @@ class MemoryServer:
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
 
-            # Normalize tags to a list
+            # Normalize tags to a list and deduplicate
             if isinstance(tags, str):
                 tags = [tag.strip() for tag in tags.split(",") if tag.strip()]
             elif isinstance(tags, list):
                 tags = [str(tag).strip() for tag in tags if str(tag).strip()]
             else:
                 tags = []
+
+            # Deduplicate tags while preserving order
+            tags = list(dict.fromkeys(tags))
 
             # Add optional hostname tracking
             final_metadata = metadata.copy()
@@ -866,18 +886,31 @@ class MemoryServer:
 
 
     async def handle_update_memory(self, arguments: dict) -> List[types.TextContent]:
-        """Update memory content/tags/metadata."""
+        """Update memory tags and/or metadata with configurable strategies."""
         try:
             hash_value = arguments.get("hash")
-            content = arguments.get("content")
-            tags = arguments.get("tags")
-            metadata = arguments.get("metadata")
+            updates = arguments.get("updates", {})
+            tags_strategy = arguments.get("tags_strategy", "replace")
+            metadata_strategy = arguments.get("metadata_strategy", "replace")
 
             if not hash_value:
                 return create_error_response("hash parameter is required")
 
-            if content is None and tags is None and metadata is None:
-                return create_error_response("At least one of content, tags, or metadata must be provided")
+            if not updates:
+                return create_error_response("updates parameter is required")
+
+            tags = updates.get("tags")
+            metadata = updates.get("metadata")
+
+            if tags is None and metadata is None:
+                return create_error_response("At least one of tags or metadata must be provided in updates")
+
+            # Validate strategies
+            if tags_strategy not in ["replace", "merge"]:
+                return create_error_response(f"Invalid tags_strategy: {tags_strategy}. Must be 'replace' or 'merge'")
+
+            if metadata_strategy not in ["replace", "merge"]:
+                return create_error_response(f"Invalid metadata_strategy: {metadata_strategy}. Must be 'replace' or 'merge'")
 
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
@@ -885,16 +918,17 @@ class MemoryServer:
             # Perform update
             success, message = await storage.update_memory(
                 hash=hash_value,
-                content=content,
                 tags=tags,
-                metadata=metadata
+                metadata=metadata,
+                tags_strategy=tags_strategy,
+                metadata_strategy=metadata_strategy
             )
 
             if success:
                 response = {
                     "success": True,
                     "affected_count": 1,
-                    "message": f"Memory {hash_value} updated successfully"
+                    "message": message
                 }
                 return create_json_response(response)
             else:

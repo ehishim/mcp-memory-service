@@ -64,26 +64,28 @@ class MemoryStorage(ABC):
     async def update_memory(
         self,
         hash: str,
-        content: Optional[str] = None,
         tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        tags_strategy: str = "replace",
+        metadata_strategy: str = "replace"
     ) -> Tuple[bool, str]:
         """
-        Unified memory update method. Updates content and/or metadata.
+        Update memory tags and/or metadata. Hash remains unchanged.
 
         Args:
             hash: Hash of the memory to update
-            content: New content (optional). If provided, regenerates embedding.
-            tags: New tags (optional). Replaces existing tags.
-            metadata: New metadata (optional). Merges with existing metadata.
+            tags: Tags to apply (optional)
+            metadata: Metadata to apply (optional)
+            tags_strategy: "replace" (default) replaces all tags, "merge" adds to existing
+            metadata_strategy: "replace" (default) replaces all metadata, "merge" preserves existing fields
 
         Returns:
             Tuple of (success, message)
 
         Note:
-            - If content is provided, embedding is regenerated
-            - Tags replace existing tags (not merged)
-            - Metadata is merged with existing metadata
+            - Content updates not supported (use delete + store instead)
+            - Tags strategy controls whether to replace or merge with existing tags
+            - Metadata strategy controls whether to replace or merge with existing metadata
             - updated_at timestamp is always refreshed
         """
         pass

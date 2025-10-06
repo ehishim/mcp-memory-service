@@ -182,6 +182,21 @@ class MCPHttpClient:
 
     # High-level tool wrappers for admin UI
 
+    async def store_memory(
+        self,
+        content: str,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Store new memory"""
+        args = {'content': content}
+        if tags is not None:
+            args['tags'] = tags
+        if metadata is not None:
+            args['metadata'] = metadata
+
+        return await self.call_tool('store_memory', args)
+
     async def recall_memory(
         self,
         query: str,
@@ -298,18 +313,24 @@ class MCPHttpClient:
     async def update_memory(
         self,
         hash: str,
-        content: Optional[str] = None,
         tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        tags_strategy: str = "replace",
+        metadata_strategy: str = "replace"
     ) -> Dict[str, Any]:
-        """Update memory content/tags/metadata"""
-        args = {'hash': hash}
-        if content is not None:
-            args['content'] = content
+        """Update memory tags/metadata with configurable strategies"""
+        updates = {}
         if tags is not None:
-            args['tags'] = tags
+            updates['tags'] = tags
         if metadata is not None:
-            args['metadata'] = metadata
+            updates['metadata'] = metadata
+
+        args = {
+            'hash': hash,
+            'updates': updates,
+            'tags_strategy': tags_strategy,
+            'metadata_strategy': metadata_strategy
+        }
 
         return await self.call_tool('update_memory', args)
 

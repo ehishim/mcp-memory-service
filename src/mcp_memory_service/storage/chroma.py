@@ -923,14 +923,21 @@ class ChromaMemoryStorage(MemoryStorage):
     async def update_memory(
         self,
         hash: str,
-        content: Optional[str] = None,
         tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        tags_strategy: str = "replace",
+        metadata_strategy: str = "replace"
     ) -> Tuple[bool, str]:
-        """Unified memory update method. Updates content and/or metadata."""
+        """Update memory tags and/or metadata with configurable strategies."""
         try:
             if self.collection is None:
                 return False, "Collection not initialized"
+
+            # Validate strategies
+            if tags_strategy not in ["replace", "merge"]:
+                return False, f"Invalid tags_strategy: {tags_strategy}"
+            if metadata_strategy not in ["replace", "merge"]:
+                return False, f"Invalid metadata_strategy: {metadata_strategy}"
 
             # Find existing memory
             existing = self.collection.get(where={"content_hash": hash})
@@ -943,31 +950,33 @@ class ChromaMemoryStorage(MemoryStorage):
             current_document = existing["documents"][0]
             updated_fields = []
 
-            # Prepare new values
-            new_document = current_document
+            # Prepare new metadata
             new_metadata = current_metadata.copy()
-            new_hash = hash
-            new_embedding = None
 
-            # Update content if provided
-            if content is not None:
-                from ..utils.hashing import generate_content_hash
-                new_hash = generate_content_hash(content)
-                new_document = content
-                new_embedding = self._generate_embedding(content)
-                new_metadata["content_hash"] = new_hash
-                updated_fields.append("content")
-                updated_fields.append("embedding")
-
-            # Update tags if provided
+            # Process tags
             if tags is not None:
-                new_metadata["tags_str"] = ",".join(tags)
-                updated_fields.append("tags")
+                current_tags_str = current_metadata.get("tags_str", "")
+                current_tags = [t.strip() for t in current_tags_str.split(",") if t.strip()] if current_tags_str else []
 
-            # Update metadata if provided
+                if tags_strategy == "replace":
+                    new_metadata["tags_str"] = ",".join(tags)
+                else:  # merge
+                    merged_tags = list(set(current_tags + tags))  # Deduplicate
+                    new_metadata["tags_str"] = ",".join(merged_tags)
+                updated_fields.append(f"tags ({tags_strategy})")
+
+            # Process metadata
             if metadata is not None:
-                new_metadata.update(metadata)
-                updated_fields.append("metadata")
+                if metadata_strategy == "replace":
+                    # Preserve system fields
+                    system_fields = {"content_hash", "tags_str", "created_at", "created_at_iso", "updated_at", "updated_at_iso"}
+                    for key in system_fields:
+                        if key in new_metadata:
+                            metadata[key] = new_metadata[key]
+                    new_metadata = metadata
+                else:  # merge
+                    new_metadata.update(metadata)
+                updated_fields.append(f"metadata ({metadata_strategy})")
 
             # Update timestamps
             import time
@@ -977,21 +986,16 @@ class ChromaMemoryStorage(MemoryStorage):
             new_metadata["updated_at_iso"] = now_iso
 
             # Upsert the updated memory
-            upsert_params = {
-                "ids": [memory_id],
-                "documents": [new_document],
-                "metadatas": [new_metadata]
-            }
-
-            if new_embedding is not None:
-                upsert_params["embeddings"] = [new_embedding]
-
-            self.collection.upsert(**upsert_params)
+            self.collection.upsert(
+                ids=[memory_id],
+                documents=[current_document],
+                metadatas=[new_metadata]
+            )
 
             if not updated_fields:
                 return True, "No changes specified"
 
-            return True, f"Updated fields: {', '.join(updated_fields)}"
+            return True, f"Updated: {', '.join(updated_fields)}"
 
         except Exception as e:
             error_msg = f"Error updating memory: {str(e)}"

@@ -204,7 +204,13 @@ class Memory:
     @classmethod
     def from_dict(cls, data: Dict[str, Any], embedding: Optional[List[float]] = None) -> 'Memory':
         """Create a Memory instance from dictionary data."""
-        tags = data.get("tags_str", "").split(",") if data.get("tags_str") else []
+        # Handle both API format (tags: list) and database format (tags_str: string)
+        if "tags" in data and isinstance(data["tags"], list):
+            tags = data["tags"]  # From API/JSON response
+        elif "tags_str" in data:
+            tags = data["tags_str"].split(",") if data["tags_str"] else []  # From database
+        else:
+            tags = []
         
         # Extract timestamps with different priorities
         # First check new timestamp fields (created_at/updated_at)

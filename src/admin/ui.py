@@ -171,32 +171,15 @@ def display_memory_card(memory: Memory, idx: int):
                 # Store the memory itself to keep it visible during edit
                 st.session_state.editing_memory = memory
 
-                # Handle tags - check both tags field and metadata
+                # Handle tags from tags field only
                 tags_to_edit = []
-
-                # First try tags field
                 if memory.tags:
                     if isinstance(memory.tags, str):
-                        # Handle both comma-separated and empty strings
+                        # Handle comma-separated string
                         if memory.tags.strip():
                             tags_to_edit = [t.strip() for t in memory.tags.split(",") if t.strip()]
                     elif isinstance(memory.tags, list):
                         tags_to_edit = memory.tags
-
-                # If still no tags, check metadata as fallback
-                if not tags_to_edit and memory.metadata and 'tags' in memory.metadata:
-                    metadata_tags = memory.metadata['tags']
-                    if isinstance(metadata_tags, str):
-                        # Try to parse JSON array string
-                        try:
-                            import json
-                            tags_to_edit = json.loads(metadata_tags)
-                        except:
-                            # Fall back to simple parsing
-                            metadata_tags = metadata_tags.strip('[]"').replace('\\"', '')
-                            tags_to_edit = [t.strip() for t in metadata_tags.split(",") if t.strip()]
-                    elif isinstance(metadata_tags, list):
-                        tags_to_edit = metadata_tags
 
                 st.session_state.edit_tags = tags_to_edit
                 st.session_state.edit_tags_original = tags_to_edit.copy()  # Track original for comparison
@@ -215,12 +198,25 @@ def display_memory_card(memory: Memory, idx: int):
         # Display content
         st.text_area("Content", memory.content, height=100, disabled=True, key=f"content_display_{idx}")
 
-        # Display tags
+        # Display tags from tags field only
+        tags_list = []
         if memory.tags:
-            # Handle both string and list tags
-            tags_list = memory.tags if isinstance(memory.tags, list) else [t.strip() for t in memory.tags.split(",") if t.strip()]
-            if tags_list:
-                st.markdown("**Tags:** " + " ".join([f"`{tag}`" for tag in tags_list]))
+            if isinstance(memory.tags, str):
+                # Handle comma-separated string
+                if memory.tags.strip():
+                    tags_list = [t.strip() for t in memory.tags.split(",") if t.strip()]
+            elif isinstance(memory.tags, list):
+                tags_list = memory.tags
+
+        if tags_list:
+            # Create colored tag chips
+            tags_html = " ".join([
+                f'<span style="background-color: #e0e0e0; color: #333; padding: 2px 8px; border-radius: 12px; margin-right: 4px; font-size: 0.85em;">{tag}</span>'
+                for tag in tags_list
+            ])
+            st.markdown(f"**Tags:** {tags_html}", unsafe_allow_html=True)
+        else:
+            st.caption("_No tags_")
 
         # Display metadata
         if memory.metadata:
@@ -307,24 +303,46 @@ def edit_memory_form():
                 st.error("❌ Cannot save: Invalid JSON in metadata")
                 return
 
-            # Build update payload
-            update_params = {}
-
-            # Check if content changed
-            if new_content != st.session_state.edit_content:
-                update_params['content'] = new_content
-
-            # Check if tags changed
+            # Check what changed
+            content_changed = new_content != st.session_state.edit_content
             original_tags = st.session_state.get('edit_tags_original', [])
-            if set(new_tags) != set(original_tags):
-                update_params['tags'] = new_tags
+            tags_changed = set(new_tags) != set(original_tags)
+            metadata_changed = parsed_metadata != st.session_state.edit_metadata
 
-            # Check if metadata changed
-            if parsed_metadata != st.session_state.edit_metadata:
-                update_params['metadata'] = parsed_metadata
+            # Handle content changes (requires delete + store)
+            if content_changed:
+                try:
+                    # Delete old memory
+                    delete_result = run_async(
+                        st.session_state.client.delete_memory(st.session_state.editing_hash)
+                    )
+                    if not delete_result.get("success"):
+                        st.error(f"❌ Delete failed: {delete_result.get('error', 'Unknown error')}")
+                        return
 
-            # Only update if there are changes
-            if update_params:
+                    # Store new memory with updated content
+                    store_result = run_async(
+                        st.session_state.client.store_memory(
+                            content=new_content,
+                            tags=new_tags,
+                            metadata=parsed_metadata
+                        )
+                    )
+                    if store_result.get("success"):
+                        st.success(f"✅ Memory updated (content changed, new hash: {store_result.get('hash', 'unknown')})")
+                    else:
+                        st.error(f"❌ Store failed: {store_result.get('error', 'Unknown error')}")
+                except Exception as e:
+                    st.error(f"❌ Error: {str(e)}")
+
+            # Handle tags/metadata changes only (no content change)
+            elif tags_changed or metadata_changed:
+                update_params = {}
+                if tags_changed:
+                    update_params['tags'] = new_tags
+                if metadata_changed:
+                    update_params['metadata'] = parsed_metadata
+
                 result = run_async(
                     st.session_state.client.update_memory(
                         st.session_state.editing_hash,
