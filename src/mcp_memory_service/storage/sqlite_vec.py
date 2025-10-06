@@ -485,7 +485,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         WHERE content_embedding MATCH ? AND k = ?
                         ORDER BY distance
                     ) e ON m.id = e.rowid
-                    ORDER BY e.distance
+                    ORDER BY e.distance, m.created_at DESC
                 ''', (serialize_float32(query_embedding), n_results))
                 
                 # Check if we got results
@@ -1126,8 +1126,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     
                     if time_where:
                         base_query += f" WHERE {time_where}"
-                    
-                    base_query += " ORDER BY e.distance"
+
+                    base_query += " ORDER BY e.distance, m.created_at DESC"
                     
                     # Prepare parameters: embedding, limit, then time filter params
                     query_params = [serialize_float32(query_embedding), n_results] + params
