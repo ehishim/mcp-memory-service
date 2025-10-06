@@ -562,7 +562,221 @@ Updated recall_memory tool description:
 6. **Clean Design**: No legacy parameters, MemoryWithScore only in admin layer
 
 ### Commits
-- `XXXXXXX` - fix: implement proper SQL pagination in recall() with total count
-- `XXXXXXX` - feat: add relevance score display in admin UI
-- `XXXXXXX` - docs: update recall_memory tool description with 4096 limit
+- `209dc06` - feat: complete UUID + hash refactor with content editing support
+- `8f1946e` - fix: handle both API and database tag formats in Memory.from_dict()
+- `7fcd6a2` - docs: add pagination UX fixes to CHANGELOG
+- `17ea7f0` - fix: reset page to 1 when switching search modes in admin UI
+- `b0fcf9b` - docs: update CHANGELOG with admin UI integration fixes
+- `3d05d1d` - fix: recall_memory pagination and relevance scores
+
+---
+
+## 🐛 Bug #13-15: Admin UI Issues (2025-10-06)
+
+**Session Focus:** User reported three critical admin UI issues after pagination refactor
+
+### Issues Reported
+
+1. **Semantic search results showing 0% relevance scores**
+2. **search_by_tag throwing "unexpected keyword argument 'match_all'" error**
+3. **Admin service printing sqlite-vec/sentence_transformers warnings on startup**
+
+### Root Causes
+
+#### Bug #13: Admin Sending Legacy `n_results` Parameter
+**File:** `src/admin/mcp_client.py:207-237`
+
+**Problem:**
+- Admin was calling `recall_memory(query, n_results=5, limit=limit, offset=offset)`
+- Server removed `n_results` parameter during pagination refactor (commit 209dc06)
+- Server rejected requests with unknown parameters
+- Result: Admin got 0 results → 0% relevance scores displayed
+
+**Fix:**
+```python
+# Before: Legacy parameter
+async def recall_memory(self, query: str, n_results: int = 5, limit: Optional[int] = None, ...):
+    args = {'query': query, 'n_results': n_results}
+
+# After: Clean signature
+async def recall_memory(self, query: str, limit: Optional[int] = None, ...):
+    args = {'query': query}
+```
+
+#### Bug #14: Parameter Name Mismatch in Tag Operations
+**Files:** `src/mcp_memory_service/server.py:779-825`, `src/mcp_memory_service/storage/sqlite_vec.py:639-688`
+
+**Problem:**
+- MCP tool `search_by_tag` received `match_all` (boolean) from admin
+- Server passed `match_all=match_all` to storage
+- Storage expected `operation="AND"/"OR"` (string)
+- Result: `SqliteVecMemoryStorage.search_by_tags() got an unexpected keyword argument 'match_all'`
+
+**Same issue in `delete_by_tag`:**
+- Server received `match_all` but storage signatures were inconsistent
+- `search_by_tags(operation)` vs `delete_by_tag(match_all)` - not aligned
+
+**Fix (Aligned Both Operations):**
+
+**Server layer (both handlers):**
+```python
+# search_by_tag handler
+match_all = arguments.get("match_all", False)
+operation = "AND" if match_all else "OR"  # Convert boolean → string
+results, total_count = await storage.search_by_tags(tags=tags, operation=operation, ...)
+
+# delete_by_tag handler
+match_all = arguments.get("match_all", False)
+operation = "AND" if match_all else "OR"  # Convert boolean → string
+deleted_count, message = await storage.delete_by_tag(tags, operation=operation)
+```
+
+**Storage layer (sqlite_vec.py & chroma.py):**
+```python
+# Both methods now use operation parameter consistently
+async def search_by_tags(self, tags: List[str], operation: str = "OR", ...):
+    if operation.upper() == "AND":
+        tag_conditions = " AND ".join(["tags LIKE ?" for _ in tags])
+    else:  # OR operation
+        tag_conditions = " OR ".join(["tags LIKE ?" for _ in tags])
+
+async def delete_by_tag(self, tags: List[str], operation: str = "OR"):
+    if operation.upper() == "AND":
+        tag_conditions = " AND ".join(["tags LIKE ?" for _ in tags])
+    else:  # OR operation
+        tag_conditions = " OR ".join(["tags LIKE ?" for _ in tags])
+```
+
+**Base class updated:**
+```python
+# Before
+async def delete_by_tag(self, tag: str) -> Tuple[int, str]:
+
+# After (aligned with search_by_tags)
+async def delete_by_tag(self, tags: List[str], operation: str = "OR") -> Tuple[int, str]:
+```
+
+#### Bug #15: Storage Import Warnings in Admin
+**Files:** `src/mcp_memory_service/storage/sqlite_vec.py:31-46`, `src/mcp_memory_service/storage/chroma.py:38-41`
+
+**Problem:**
+- Admin imports `Memory` from `mcp_memory_service.models.memory`
+- Python loads `mcp_memory_service/__init__.py` which imports storage backends
+- Storage modules print warnings at import time (lines 38, 46):
+  ```python
+  except ImportError:
+      print("WARNING: sqlite-vec not available. Install with: pip install sqlite-vec")
+      print("WARNING: sentence_transformers not available...")
+  ```
+- Admin doesn't need storage backends (only MCP client over HTTP)
+- Warnings confuse users and clutter logs
+
+**Fix:**
+```python
+# Before: Print warnings at module import
+except ImportError:
+    SQLITE_VEC_AVAILABLE = False
+    print("WARNING: sqlite-vec not available. Install with: pip install sqlite-vec")
+
+# After: Silent import, warnings deferred to initialization
+except ImportError:
+    SQLITE_VEC_AVAILABLE = False
+    # Warning will be shown during initialization, not module import
+```
+
+**Rationale:**
+- Storage initialization already raises proper errors (lines 146-150 in sqlite_vec.py)
+- Module-level warnings are inappropriate for optional dependencies
+- Admin never initializes storage, so warnings are irrelevant
+
+### Architecture Consistency
+
+**Parameter Flow (Now Aligned):**
+
+```
+Layer 1 - Admin/Client:
+  search_by_tag(match_all=True/False)
+  delete_by_tag(match_all=True/False)
+         ↓
+Layer 2 - MCP Server:
+  Receives: match_all (boolean)
+  Converts: operation = "AND" if match_all else "OR"
+  Calls storage with: operation (string)
+         ↓
+Layer 3 - Storage (base.py, sqlite_vec.py, chroma.py):
+  search_by_tags(operation="AND"/"OR")
+  delete_by_tag(operation="AND"/"OR")
+  Both use identical logic: operation.upper() == "AND"
+```
+
+**Consistency achieved:**
+- Both tag operations use same parameter transformation
+- Both storage methods use identical string parameter
+- Both handle AND/OR logic identically
+- Base class signature matches implementations
+
+### Testing
+
+**Before fixes:**
+```bash
+# Admin UI behavior:
+1. Search returns 0 results → "No memories found"
+2. Relevance scores show 0.0% for all results
+3. Tag search throws error: "unexpected keyword argument 'match_all'"
+4. Console shows warnings:
+   WARNING: sqlite-vec not available. Install with: pip install sqlite-vec
+   WARNING: sentence_transformers not available...
+```
+
+**After fixes:**
+```bash
+# Admin UI behavior:
+1. ✅ Semantic search returns proper results
+2. ✅ Relevance scores display correctly (e.g., "🎯 85.4% | Memory content...")
+3. ✅ Tag search works with AND/OR logic
+4. ✅ Tag delete works with AND/OR logic
+5. ✅ No warnings on admin startup (clean console)
+```
+
+**Python syntax validation:**
+```bash
+python3 -m py_compile src/mcp_memory_service/server.py  ✅
+python3 -m py_compile src/mcp_memory_service/storage/sqlite_vec.py  ✅
+python3 -m py_compile src/mcp_memory_service/storage/chroma.py  ✅
+python3 -m py_compile src/mcp_memory_service/storage/base.py  ✅
+python3 -m py_compile src/admin/mcp_client.py  ✅
+python3 -m py_compile src/admin/ui.py  ✅
+```
+
+### Files Modified
+
+1. **src/admin/mcp_client.py**
+   - Removed `n_results` parameter from `recall_memory()`
+   - Updated signature to match server API
+
+2. **src/mcp_memory_service/server.py**
+   - Added `operation` conversion in `handle_search_by_tag()`
+   - Added `operation` conversion in `handle_delete_by_tag()`
+
+3. **src/mcp_memory_service/storage/sqlite_vec.py**
+   - Removed module-level print warnings
+   - Updated `delete_by_tag()` signature: `operation` instead of `match_all`
+
+4. **src/mcp_memory_service/storage/chroma.py**
+   - Removed module-level print warning
+   - Updated `delete_by_tag()` signature: `operation` instead of `match_all`
+
+5. **src/mcp_memory_service/storage/base.py**
+   - Updated abstract method signature for `delete_by_tag()`
+
+### Commits
+- `fd135e5` - fix: admin UI issues and align tag operations
+
+### Key Improvements
+
+1. **API Alignment**: search_by_tag and delete_by_tag now have identical parameter handling
+2. **Clean Imports**: Admin service starts without dependency warnings
+3. **Better UX**: Relevance scores displayed correctly in admin UI
+4. **Consistency**: All tag operations use same boolean→string conversion pattern
+5. **Documentation**: Clear parameter flow across all layers
 
