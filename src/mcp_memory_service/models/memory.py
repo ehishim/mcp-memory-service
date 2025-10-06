@@ -242,11 +242,23 @@ class Memory:
         # Extract metadata field directly (don't build from remaining fields)
         metadata = data.get("metadata", {})
 
+        # Extract hash (optional for API responses, required for database)
+        # If hash is missing, generate it from content/tags/metadata
+        hash_val = data.get("hash")
+        if not hash_val:
+            # Import here to avoid circular dependency
+            from ..utils.hashing import generate_content_hash
+            hash_val = generate_content_hash(
+                data["content"],
+                tags,
+                metadata
+            )
+
         # Create memory instance with synchronized timestamps
         return cls(
             id=memory_id,
             content=data["content"],
-            hash=data["hash"],
+            hash=hash_val,
             tags=[tag for tag in tags if tag],  # Filter out empty tags
             metadata=metadata,
             embedding=embedding,
