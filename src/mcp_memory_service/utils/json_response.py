@@ -73,7 +73,7 @@ def memory_to_dict(memory: Memory, include_relevance: Optional[float] = None) ->
         Dictionary representation of memory
     """
     mem_dict = {
-        "hash": memory.hash,
+        "id": memory.id,
         "content": memory.content,
         "tags": memory.tags or [],
         "metadata": memory.metadata or {},
