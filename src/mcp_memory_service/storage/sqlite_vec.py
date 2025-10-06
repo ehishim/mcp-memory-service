@@ -1201,19 +1201,19 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     # Cap k value at 4096 (sqlite-vec limit)
                     k_value = min(4096, (limit or 100) + offset) if limit is not None else 4096
 
-                    # First, get total count of matching results
+                    # First, get total count of matching results (always use k=4096 for accurate count)
                     count_query = '''
                         SELECT COUNT(*) FROM memories m
                         JOIN (
                             SELECT rowid
                             FROM memory_embeddings
-                            WHERE content_embedding MATCH ? AND k = ?
+                            WHERE content_embedding MATCH ? AND k = 4096
                         ) e ON m.rowid = e.rowid
                     '''
                     if time_where:
                         count_query += f" WHERE {time_where}"
 
-                    count_params = [serialize_float32(query_embedding), k_value] + params
+                    count_params = [serialize_float32(query_embedding)] + params
                     total_count = self.conn.execute(count_query, count_params).fetchone()[0]
 
                     # Build SQL query with time filtering and pagination
