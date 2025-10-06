@@ -75,11 +75,58 @@ curl -H "Authorization: Bearer Y2xhdWRlOmJlc3RfcGFzc3dvcmRfOTk5X21lbQ==" \
 }
 ```
 
-### Commits
+### Commits (First Round)
 - `14b237d` - Fix Memory model field rename (content_hash → hash)
 - `f363d95` - Fix JSON response (return id not hash)
 - `4d229f4` - Fix Memory.from_dict() deserialization
 - `a371173` - Complete migration (to_dict, ChromaDB, hash generation)
+
+---
+
+## 🐛 Additional Bugs Found (Same Session - 2025-10-06)
+
+After initial fixes, user reported two new issues:
+
+### Bug #7: recall_memory Returns All 479 Memories
+- **File:** `src/mcp_memory_service/storage/sqlite_vec.py:1192`
+- **Problem:** JOIN used `m.id = e.rowid` (UUID string vs integer), causing semantic search to fail
+- **Symptoms:**
+  - Any query returned `total: 479` (all memories)
+  - Semantic search completely broken
+  - Fallback to time-based filtering returned everything
+- **Fix:** Changed to `m.rowid = e.rowid` for proper vector search JOIN
+- **Code Change:**
+```python
+# Before: Wrong JOIN (UUID != integer)
+JOIN (...) e ON m.id = e.rowid
+
+# After: Correct JOIN (rowid = rowid)
+JOIN (...) e ON m.rowid = e.rowid
+```
+
+### Bug #8: Admin UI Shows "No Memories Found"
+- **File:** `src/mcp_memory_service/models/memory.py:249`
+- **Problem:** `Memory.from_dict()` required `hash` field, but API only returns `id`
+- **Context:** API responses intentionally exclude internal `hash` field
+- **Symptoms:** Admin UI could fetch data but failed to parse Memory objects
+- **Fix:** Made hash optional in `from_dict()`, auto-generates from content/tags/metadata if missing
+- **Code Change:**
+```python
+# Extract hash (optional for API responses, required for database)
+hash_val = data.get("hash")
+if not hash_val:
+    from ..utils.hashing import generate_content_hash
+    hash_val = generate_content_hash(data["content"], tags, metadata)
+```
+
+### Commits (Second Round)
+- `c34b367` - Fix recall_memory JOIN using UUID instead of rowid
+- `03a13e2` - Make hash optional in Memory.from_dict() for API compatibility
+
+### Root Cause Analysis
+Both bugs stemmed from the UUID + hash hybrid model migration:
+1. **Vector search JOIN** - Used new UUID `id` field where rowid (integer) was needed
+2. **API serialization** - Removed `hash` from responses but didn't make it optional in deserialization
 
 ### Key Learnings
 1. **Systematic migration required** - Field renames need comprehensive search across all files
@@ -87,6 +134,8 @@ curl -H "Authorization: Bearer Y2xhdWRlOmJlc3RfcGFzc3dvcmRfOTk5X21lbQ==" \
 3. **Metadata design clarified** - Metadata is user-defined only, no internal fields
 4. **Testing across layers** - Bug manifested in API, admin UI, and storage layer
 5. **Public vs internal fields** - UUID (`id`) is public, hash is internal for deduplication
+6. **JOIN field types matter** - UUID strings vs integer rowids require different JOIN columns
+7. **Backward compatibility** - API field removal requires defensive deserialization logic
 
 ## ✅ What We Completed This Session
 
