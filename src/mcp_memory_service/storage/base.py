@@ -61,23 +61,30 @@ class MemoryStorage(ABC):
         pass
     
     @abstractmethod
-    async def update_memory_metadata(self, content_hash: str, updates: Dict[str, Any], preserve_timestamps: bool = True) -> Tuple[bool, str]:
+    async def update_memory(
+        self,
+        hash: str,
+        content: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Tuple[bool, str]:
         """
-        Update memory metadata without recreating the entire memory entry.
-        
+        Unified memory update method. Updates content and/or metadata.
+
         Args:
-            content_hash: Hash of the memory to update
-            updates: Dictionary of metadata fields to update
-            preserve_timestamps: Whether to preserve original created_at timestamp
-            
+            hash: Hash of the memory to update
+            content: New content (optional). If provided, regenerates embedding.
+            tags: New tags (optional). Replaces existing tags.
+            metadata: New metadata (optional). Merges with existing metadata.
+
         Returns:
             Tuple of (success, message)
-            
+
         Note:
-            - Only metadata and tags can be updated
-            - Content and content_hash cannot be modified
+            - If content is provided, embedding is regenerated
+            - Tags replace existing tags (not merged)
+            - Metadata is merged with existing metadata
             - updated_at timestamp is always refreshed
-            - created_at is preserved unless preserve_timestamps=False
         """
         pass
     

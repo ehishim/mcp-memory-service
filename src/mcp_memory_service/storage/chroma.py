@@ -913,9 +913,88 @@ class ChromaMemoryStorage(MemoryStorage):
             
             summary = f"Updated fields: {', '.join(updated_fields)}"
             return True, summary
-            
+
         except Exception as e:
             error_msg = f"Error updating memory metadata: {str(e)}"
+            logger.error(error_msg)
+            traceback.print_exc()
+            return False, error_msg
+
+    async def update_memory(
+        self,
+        hash: str,
+        content: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Tuple[bool, str]:
+        """Unified memory update method. Updates content and/or metadata."""
+        try:
+            if self.collection is None:
+                return False, "Collection not initialized"
+
+            # Find existing memory
+            existing = self.collection.get(where={"content_hash": hash})
+
+            if not existing["ids"]:
+                return False, f"Memory with hash {hash} not found"
+
+            memory_id = existing["ids"][0]
+            current_metadata = existing["metadatas"][0]
+            current_document = existing["documents"][0]
+            updated_fields = []
+
+            # Prepare new values
+            new_document = current_document
+            new_metadata = current_metadata.copy()
+            new_hash = hash
+            new_embedding = None
+
+            # Update content if provided
+            if content is not None:
+                from ..utils.hashing import generate_content_hash
+                new_hash = generate_content_hash(content)
+                new_document = content
+                new_embedding = self._generate_embedding(content)
+                new_metadata["content_hash"] = new_hash
+                updated_fields.append("content")
+                updated_fields.append("embedding")
+
+            # Update tags if provided
+            if tags is not None:
+                new_metadata["tags_str"] = ",".join(tags)
+                updated_fields.append("tags")
+
+            # Update metadata if provided
+            if metadata is not None:
+                new_metadata.update(metadata)
+                updated_fields.append("metadata")
+
+            # Update timestamps
+            import time
+            now = time.time()
+            now_iso = datetime.utcfromtimestamp(now).isoformat() + "Z"
+            new_metadata["updated_at"] = now
+            new_metadata["updated_at_iso"] = now_iso
+
+            # Upsert the updated memory
+            upsert_params = {
+                "ids": [memory_id],
+                "documents": [new_document],
+                "metadatas": [new_metadata]
+            }
+
+            if new_embedding is not None:
+                upsert_params["embeddings"] = [new_embedding]
+
+            self.collection.upsert(**upsert_params)
+
+            if not updated_fields:
+                return True, "No changes specified"
+
+            return True, f"Updated fields: {', '.join(updated_fields)}"
+
+        except Exception as e:
+            error_msg = f"Error updating memory: {str(e)}"
             logger.error(error_msg)
             traceback.print_exc()
             return False, error_msg

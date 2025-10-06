@@ -910,13 +910,116 @@ class SqliteVecMemoryStorage(MemoryStorage):
             summary = f"Updated fields: {', '.join(updated_fields)}"
             logger.info(f"Successfully updated metadata for memory {content_hash}")
             return True, summary
-            
+
         except Exception as e:
             error_msg = f"Error updating memory metadata: {str(e)}"
             logger.error(error_msg)
             logger.error(traceback.format_exc())
             return False, error_msg
-    
+
+    async def update_memory(
+        self,
+        hash: str,
+        content: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Tuple[bool, str]:
+        """Unified memory update method. Updates content and/or metadata."""
+        try:
+            if not self.conn:
+                return False, "Database not initialized"
+
+            # Get current memory
+            memory = await self.get_by_hash(hash)
+            if not memory:
+                return False, f"Memory with hash {hash} not found"
+
+            updated_fields = []
+            new_hash = hash
+
+            # Update content if provided (requires embedding regeneration)
+            if content is not None:
+                from ..utils.hashing import generate_content_hash
+                new_hash = generate_content_hash(content)
+                new_embedding = self._generate_embedding(content)
+
+                # Update memory table
+                self.conn.execute('''
+                    UPDATE memories
+                    SET content = ?, content_hash = ?, updated_at = ?, updated_at_iso = ?
+                    WHERE content_hash = ?
+                ''', (
+                    content,
+                    new_hash,
+                    time.time(),
+                    datetime.now().isoformat() + 'Z',
+                    hash
+                ))
+
+                # Update embedding
+                cursor = self.conn.execute('SELECT id FROM memories WHERE content_hash = ?', (new_hash,))
+                row = cursor.fetchone()
+                if row:
+                    memory_id = row[0]
+                    self.conn.execute('''
+                        UPDATE memory_embeddings
+                        SET content_embedding = ?
+                        WHERE rowid = ?
+                    ''', (serialize_float32(new_embedding), memory_id))
+
+                updated_fields.append("content")
+                updated_fields.append("embedding")
+                hash = new_hash  # Update hash for subsequent metadata updates
+
+            # Update tags and/or metadata if provided
+            if tags is not None or metadata is not None:
+                # Get current state
+                cursor = self.conn.execute('''
+                    SELECT tags, metadata FROM memories WHERE content_hash = ?
+                ''', (hash,))
+                row = cursor.fetchone()
+
+                if row:
+                    current_tags, current_metadata_str = row
+                    current_metadata = json.loads(current_metadata_str) if current_metadata_str else {}
+
+                    # Prepare new values
+                    new_tags = ",".join(tags) if tags is not None else current_tags
+                    new_metadata = current_metadata.copy()
+                    if metadata is not None:
+                        new_metadata.update(metadata)
+
+                    # Update database
+                    self.conn.execute('''
+                        UPDATE memories SET
+                            tags = ?, metadata = ?, updated_at = ?, updated_at_iso = ?
+                        WHERE content_hash = ?
+                    ''', (
+                        new_tags,
+                        json.dumps(new_metadata),
+                        time.time(),
+                        datetime.now().isoformat() + 'Z',
+                        hash
+                    ))
+
+                    if tags is not None:
+                        updated_fields.append("tags")
+                    if metadata is not None:
+                        updated_fields.append("metadata")
+
+            self.conn.commit()
+
+            if not updated_fields:
+                return True, "No changes specified"
+
+            return True, f"Updated fields: {', '.join(updated_fields)}"
+
+        except Exception as e:
+            error_msg = f"Error updating memory: {str(e)}"
+            logger.error(error_msg)
+            logger.error(traceback.format_exc())
+            return False, error_msg
+
     def get_stats(self) -> Dict[str, Any]:
         """Get storage statistics."""
         try:
