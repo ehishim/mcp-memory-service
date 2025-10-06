@@ -13,7 +13,13 @@ done
 
 # Set defaults if not provided via flags or env vars
 if [ -z "$MCP_SERVER_URL" ]; then
-    export MCP_SERVER_URL="http://localhost:8030/mcp"
+    MCP_SERVER_URL="http://localhost:8030/mcp"
+fi
+
+# Export environment variables for Streamlit
+export MCP_SERVER_URL
+if [ -n "$MCP_AUTH_TOKEN" ]; then
+    export MCP_AUTH_TOKEN
 fi
 
 echo "🧠 MCP Memory Service - Admin UI"
@@ -22,7 +28,6 @@ echo ""
 echo "MCP Server: $MCP_SERVER_URL"
 if [ -n "$MCP_AUTH_TOKEN" ]; then
     echo "Auth Token: ******* (provided)"
-    export MCP_AUTH_TOKEN
 else
     echo "Auth Token: (none)"
 fi
