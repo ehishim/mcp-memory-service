@@ -769,8 +769,39 @@ python3 -m py_compile src/admin/ui.py  ✅
 5. **src/mcp_memory_service/storage/base.py**
    - Updated abstract method signature for `delete_by_tag()`
 
+### Follow-up: Missed n_results in Admin UI
+
+**Problem:**
+After initial fix, admin UI still had `n_results` parameter in two call sites:
+- Line 513: `recall_memory("*", n_results=100, limit=page_size, offset=offset)`
+- Line 525: `recall_memory(query_input, n_results=n_results, limit=page_size, offset=offset)`
+- Line 473: Unused slider widget `n_results = st.slider("Max Results", ...)`
+
+**Error:**
+```
+❌ Error fetching memories: MCPHttpClient.recall_memory() got an unexpected keyword argument 'n_results'
+```
+
+**Fix:**
+```python
+# Before: List All with n_results
+recall_memory("*", n_results=100, limit=page_size, offset=offset)
+
+# After: Clean parameters
+recall_memory("*", limit=page_size, offset=offset)
+
+# Before: Semantic Search with n_results
+recall_memory(query_input, n_results=n_results, limit=page_size, offset=offset)
+
+# After: Clean parameters
+recall_memory(query_input, limit=page_size, offset=offset)
+```
+
+Also removed unused `n_results` slider from Semantic Search UI (line 473).
+
 ### Commits
 - `fd135e5` - fix: admin UI issues and align tag operations
+- `XXXXXXX` - fix: remove remaining n_results usage from admin UI
 
 ### Key Improvements
 
@@ -779,4 +810,5 @@ python3 -m py_compile src/admin/ui.py  ✅
 3. **Better UX**: Relevance scores displayed correctly in admin UI
 4. **Consistency**: All tag operations use same boolean→string conversion pattern
 5. **Documentation**: Clear parameter flow across all layers
+6. **Complete Migration**: All n_results references removed from admin UI
 

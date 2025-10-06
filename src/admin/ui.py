@@ -470,7 +470,6 @@ def main():
 
         if search_mode == "Semantic Search":
             query_input = st.text_input("Search Query", placeholder="e.g., 'docker configurations' or 'last week'")
-            n_results = st.slider("Max Results", min_value=1, max_value=100, value=10)
         elif search_mode == "Search by Tags":
             tags_input = st.text_input("Tags (comma-separated)")
             match_all = st.checkbox("Match ALL tags (AND logic)", value=False)
@@ -510,7 +509,6 @@ def main():
             memories, pagination = run_async(
                 st.session_state.client.recall_memory(
                     "*",
-                    n_results=100,  # Keep high for backward compat
                     limit=page_size,
                     offset=offset
                 )
@@ -522,7 +520,6 @@ def main():
                 memories, pagination = run_async(
                     st.session_state.client.recall_memory(
                         query_input,
-                        n_results=n_results,
                         limit=page_size,
                         offset=offset
                     )
