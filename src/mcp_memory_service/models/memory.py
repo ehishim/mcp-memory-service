@@ -183,7 +183,7 @@ class Memory:
         return {
             "id": self.id,
             "content": self.content,
-            "content_hash": self.content_hash,
+            "hash": self.hash,
             "tags_str": ",".join(self.tags) if self.tags else "",
             # Store timestamps in all formats for better compatibility
             "timestamp": float(self.created_at),  # Changed from int() to preserve precision

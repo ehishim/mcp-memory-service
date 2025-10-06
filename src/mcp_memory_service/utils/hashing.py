@@ -45,20 +45,14 @@ def generate_content_hash(
     # Sort and deduplicate tags
     sorted_tags = sorted(list(set(tags))) if tags else []
 
-    # Filter and sort metadata
-    static_metadata = {}
-    if metadata:
-        static_metadata = {
-            k: v for k, v in sorted(metadata.items())
-            if k not in ['created_at', 'updated_at', 'created_at_iso', 'updated_at_iso',
-                        'timestamp', 'content_hash', 'embedding']
-        }
+    # Sort metadata (all fields included - metadata is user-defined only)
+    sorted_metadata = dict(sorted(metadata.items())) if metadata else {}
 
     # Build hash input with all components (order-independent)
     hash_input = {
         "content": normalized_content,
         "tags": sorted_tags,
-        "metadata": static_metadata
+        "metadata": sorted_metadata
     }
 
     # Generate hash with consistent serialization

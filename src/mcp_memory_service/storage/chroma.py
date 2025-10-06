@@ -481,7 +481,7 @@ class ChromaMemoryStorage(MemoryStorage):
 
             # Check for duplicates by hash (not by ID)
             existing = self.collection.get(
-                where={"hash": memory.content_hash}
+                where={"hash": memory.hash}
             )
             if existing["ids"]:
                 # Return existing ID when duplicate found
@@ -524,22 +524,22 @@ class ChromaMemoryStorage(MemoryStorage):
 
             for memory in memories:
                 # Check for duplicates in batch by hash
-                if memory.content_hash not in seen_hashes:
+                if memory.hash not in seen_hashes:
                     # Check existing in database by hash
                     existing = self.collection.get(
-                        where={"hash": memory.content_hash}
+                        where={"hash": memory.hash}
                     )
                     if existing["ids"]:
-                        results.append((False, f"Duplicate content detected: {memory.content_hash} (existing ID: {existing['ids'][0]})"))
+                        results.append((False, f"Duplicate content detected: {memory.hash} (existing ID: {existing['ids'][0]})"))
                         continue
 
                     documents.append(memory.content)
                     metadatas.append(self._optimize_metadata_for_chroma(memory))
                     ids.append(memory.id)
-                    seen_hashes.add(memory.content_hash)
+                    seen_hashes.add(memory.hash)
                     results.append((True, f"Queued for batch storage: {memory.id}"))
                 else:
-                    results.append((False, f"Duplicate in batch: {memory.content_hash}"))
+                    results.append((False, f"Duplicate in batch: {memory.hash}"))
 
             if documents:
                 # Batch add to collection
@@ -1132,7 +1132,7 @@ class ChromaMemoryStorage(MemoryStorage):
         # IMPORTANT: Store timestamp as float to preserve sub-second precision
         metadata = {
             "id": memory.id,
-            "hash": memory.content_hash,
+            "hash": memory.hash,
 
             "timestamp": float(memory.created_at),  # Changed from int() to float()
             "created_at_iso": memory.created_at_iso,
