@@ -33,7 +33,7 @@ class Memory:
     """Represents a single memory entry with UUID + hash identity model."""
     id: str  # UUID v4 - stable identifier
     content: str
-    content_hash: str  # SHA-256 hash of content + tags + metadata
+    hash: str  # SHA-256 hash of content + tags + metadata (renamed from content_hash)
     tags: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
     embedding: Optional[List[float]] = None
