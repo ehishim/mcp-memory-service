@@ -1024,9 +1024,10 @@ class MemoryServer:
                 logger.info(f"Direct parse result: {start_timestamp} to {end_timestamp}")
 
             # Retrieve memories with timestamp filter and optional semantic search
-            # If cleaned_query is empty or just whitespace after removing time expressions,
+            # If cleaned_query is empty, just whitespace, or "*" (wildcard for list all),
             # we should perform time-based retrieval only
-            semantic_query = cleaned_query.strip() if cleaned_query.strip() else None
+            cleaned = cleaned_query.strip()
+            semantic_query = None if (not cleaned or cleaned == "*") else cleaned
 
             # Use the enhanced recall method from ChromaMemoryStorage that combines
             # semantic search with time filtering, or just time filtering if no semantic query
