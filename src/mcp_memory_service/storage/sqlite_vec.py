@@ -558,7 +558,9 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     )
 
                     # Calculate relevance score (lower distance = higher relevance)
-                    relevance_score = max(0.0, 1.0 - distance)
+                    # sqlite-vec uses L2 distance by default (unbounded, 0 = identical)
+                    # Convert to 0-1 score where 1 = perfect match, 0 = very dissimilar
+                    relevance_score = 1.0 / (1.0 + distance)
 
                     results.append(MemoryQueryResult(
                         memory=memory,
@@ -1260,7 +1262,9 @@ class SqliteVecMemoryStorage(MemoryStorage):
                             )
 
                             # Calculate relevance score (lower distance = higher relevance)
-                            relevance_score = max(0.0, 1.0 - distance)
+                            # sqlite-vec uses L2 distance by default (unbounded, 0 = identical)
+                            # Convert to 0-1 score where 1 = perfect match, 0 = very dissimilar
+                            relevance_score = 1.0 / (1.0 + distance)
 
                             results.append(MemoryQueryResult(
                                 memory=memory,

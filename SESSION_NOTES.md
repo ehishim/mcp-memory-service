@@ -812,3 +812,162 @@ Also removed unused `n_results` slider from Semantic Search UI (line 473).
 5. **Documentation**: Clear parameter flow across all layers
 6. **Complete Migration**: All n_results references removed from admin UI
 
+---
+
+## 🐛 Bug #16: L2 Distance Relevance Score Calculation (2025-10-06)
+
+**Session Focus:** User reported semantic search showing 0.0% relevance scores in admin UI even after Bug #13-15 fixes
+
+### Problem Discovery
+
+After fixing the `n_results` parameter issue (Bug #13), user reported semantic search STILL showing 0.0% relevance scores:
+
+1. **Initial confusion**: User screenshot showed "Search by Content" mode (no relevance scores expected)
+2. **Real issue**: User provided NEW screenshot with "Semantic Search" mode, still showing 0.0%
+3. **Investigation**: User directed: "check how admin @src/admin/mcp_client.py calls it" and "check the mcp calls, and check if it returns score in json"
+
+### Root Cause
+
+**File:** `src/mcp_memory_service/storage/sqlite_vec.py:560-563, 1262-1265`
+
+**Problem:**
+- sqlite-vec uses **L2 (Euclidean) distance** by default (unbounded, can be > 1.0)
+- Old formula: `relevance_score = max(0.0, 1.0 - distance)`
+- This assumes distance ≤ 1.0 (correct for cosine distance)
+- Actual distances from database: 1.105222, 1.107580, 1.112821, etc.
+- Result: `max(0.0, 1.0 - 1.105) = max(0.0, -0.105) = 0.0` ❌
+
+**Evidence from database:**
+```python
+# Direct query showing raw sqlite-vec distances:
+SELECT m.id, m.content, e.distance
+FROM memories m
+JOIN (
+    SELECT rowid, distance
+    FROM memory_embeddings
+    WHERE content_embedding MATCH ? AND k = ?
+    ORDER BY distance
+) e ON m.rowid = e.rowid
+
+# Results:
+Distance: 1.105222 → Old formula: 0.0000 (0.0%)
+Distance: 1.107580 → Old formula: 0.0000 (0.0%)
+Distance: 1.112821 → Old formula: 0.0000 (0.0%)
+```
+
+**MCP Server validation:**
+```python
+# test_mcp_response.py output:
+{
+  "memories": [
+    {
+      "id": "43422478-05d6-4967-97ae-27df08419121",
+      "content": "# MAU Optimization...",
+      "relevance_score": 0.0  // ✅ Field present but value wrong
+    }
+  ]
+}
+```
+
+Server WAS returning `relevance_score` fields correctly, but all values were 0.0.
+
+### Solution
+
+Changed relevance score calculation to work with unbounded L2 distance:
+
+**File:** `src/mcp_memory_service/storage/sqlite_vec.py`
+
+**Lines 560-563 (recall method):**
+```python
+# OLD (BROKEN for L2 distance > 1.0):
+relevance_score = max(0.0, 1.0 - distance)
+
+# NEW (FIXED - works with unbounded L2 distance):
+# Calculate relevance score (lower distance = higher relevance)
+# sqlite-vec uses L2 distance by default (unbounded, 0 = identical)
+# Convert to 0-1 score where 1 = perfect match, 0 = very dissimilar
+relevance_score = 1.0 / (1.0 + distance)
+```
+
+**Lines 1262-1265 (search method):**
+```python
+# Same fix applied to search() method for consistency
+relevance_score = 1.0 / (1.0 + distance)
+```
+
+### Mathematical Validation
+
+**Formula comparison:**
+- **Old formula** (cosine): `max(0.0, 1.0 - distance)`
+  - Works when: distance ∈ [0, 1]
+  - Fails when: distance > 1.0 → returns 0.0
+
+- **New formula** (L2): `1.0 / (1.0 + distance)`
+  - Works for: distance ∈ [0, ∞)
+  - Properties:
+    - distance = 0 → score = 1.0 (100%, perfect match)
+    - distance = 1.0 → score = 0.5 (50%)
+    - distance = ∞ → score → 0.0 (0%, no similarity)
+    - Smaller distance still yields higher score ✓
+
+**Example calculations:**
+```python
+distances = [1.105222, 1.107580, 1.112821, 1.130083, 1.141230]
+
+# Distance 1.1052:
+#   Old: max(0.0, 1.0 - 1.1052) = 0.0000 (0.0%)
+#   New: 1.0 / (1.0 + 1.1052) = 0.4750 (47.5%)
+
+# Distance 1.1076:
+#   Old: max(0.0, 1.0 - 1.1076) = 0.0000 (0.0%)
+#   New: 1.0 / (1.0 + 1.1076) = 0.4745 (47.4%)
+
+# Distance 1.1128:
+#   Old: max(0.0, 1.0 - 1.1128) = 0.0000 (0.0%)
+#   New: 1.0 / (1.0 + 1.1128) = 0.4733 (47.3%)
+```
+
+### Testing Results
+
+**Before fix:**
+```
+🎯 0.0% | # MAU Optimization...
+🎯 0.0% | # User Retention Strategy...
+🎯 0.0% | # Feature Adoption Tracking...
+```
+
+**After fix (expected):**
+```
+🎯 47.5% | # MAU Optimization...
+🎯 47.4% | # User Retention Strategy...
+🎯 47.3% | # Feature Adoption Tracking...
+```
+
+### Files Modified
+
+1. **src/mcp_memory_service/storage/sqlite_vec.py**
+   - Lines 560-563: Fixed relevance calculation in `recall()` method
+   - Lines 1262-1265: Fixed relevance calculation in `search()` method
+   - Added detailed comments explaining L2 distance behavior
+
+### Key Learnings
+
+1. **Distance metric matters**: L2 (Euclidean) vs Cosine distance have different ranges
+2. **Formula assumptions**: Must validate formula works for actual distance range
+3. **sqlite-vec defaults**: Uses L2 distance, not cosine (unbounded)
+4. **Testing across layers**: Bug visible in UI but root cause in storage calculation
+5. **MCP debugging**: Tested MCP endpoint directly to isolate server vs client issues
+6. **User-directed investigation**: User's prompts ("check the mcp calls") led to correct diagnosis
+
+### Commits
+
+- `XXXXXXX` - fix: L2 distance relevance score calculation for semantic search
+
+### Next Steps
+
+User requested:
+- ✅ Fix relevance score calculation
+- ✅ Update SESSION_NOTES.md
+- ⏳ Commit changes
+- ⏳ Push to repository
+
