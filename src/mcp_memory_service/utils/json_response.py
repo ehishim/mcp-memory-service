@@ -57,7 +57,6 @@ def create_error_response(error: str) -> List[types.TextContent]:
     """
     return create_json_response({
         "success": False,
-        "data": None,
         "error": error
     })
 

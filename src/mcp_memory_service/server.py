@@ -446,7 +446,7 @@ class MemoryServer:
                 tools = [
                     types.Tool(
                         name="store_memory",
-                        description="Store memory with optional tags/metadata. Returns hash.",
+                        description="Store memory with optional tags/metadata. Returns hash of the created memory.",
                         inputSchema={
                             "type": "object",
                             "properties": {
@@ -738,14 +738,15 @@ class MemoryServer:
             success, message = await storage.store(memory)
 
             if success:
-                # Return success message with hash for reference
-                response = f"✅ {message}\nHash: {content_hash}"
-                return [types.TextContent(type="text", text=response)]
+                # Return JSON response with success status and hash
+                return create_success_response({
+                    "hash": content_hash
+                })
             else:
-                return [types.TextContent(type="text", text=f"❌ {message}")]
+                return create_error_response(message)
         except Exception as e:
             logger.error(f"Error storing memory: {str(e)}\n{traceback.format_exc()}")
-            return [types.TextContent(type="text", text=f"Error storing memory: {str(e)}")]
+            return create_error_response(f"Error storing memory: {str(e)}")
     
     async def handle_search_by_tag(self, arguments: dict) -> List[types.TextContent]:
         """Tag filtering with pagination support."""
