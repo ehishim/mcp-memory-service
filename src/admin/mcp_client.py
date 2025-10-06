@@ -44,10 +44,9 @@ class MCPHttpClient:
             if self.auth_token:
                 headers['Authorization'] = f'Bearer {self.auth_token}'
 
-            # Create timeout inside async context
-            timeout = aiohttp.ClientTimeout(total=self.timeout_seconds)
+            # Don't use timeout in Streamlit context to avoid event loop issues
+            # Streamlit's sync-to-async wrapper conflicts with aiohttp timeout
             self._session = aiohttp.ClientSession(
-                timeout=timeout,
                 headers=headers
             )
 
