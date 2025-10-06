@@ -434,60 +434,35 @@ class MemoryServer:
                 tools = [
                     types.Tool(
                         name="store_memory",
-                        description="""Store new information with optional tags.
-
-                        Accepts two tag formats in metadata:
-                        - Array: ["tag1", "tag2"]
-                        - String: "tag1,tag2"
+                        description="""Store new information with optional tags and metadata.
 
                        Examples:
-                        # Using array format:
                         {
                             "content": "Memory content",
+                            "tags": ["important", "reference"],
                             "metadata": {
-                                "tags": ["important", "reference"],
-                                "type": "note"
+                                "custom_field": "value"
                             }
                         }
 
-                        # Using string format(preferred):
                         {
-                            "content": "Memory content",
-                            "metadata": {
-                                "tags": "important,reference",
-                                "type": "note"
-                            }
+                            "content": "Memory content"
                         }""",
                         inputSchema={
                             "type": "object",
                             "properties": {
                                 "content": {
                                     "type": "string",
-                                    "description": "The memory content to store, such as a fact, note, or piece of information."
+                                    "description": "The memory content to store."
+                                },
+                                "tags": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "Optional array of tags to categorize the memory."
                                 },
                                 "metadata": {
                                     "type": "object",
-                                    "description": "Optional metadata about the memory, including tags and type.",
-                                    "properties": {
-                                        "tags": {
-                                            "oneOf": [
-                                                {
-                                                    "type": "array",
-                                                    "items": {"type": "string"},
-                                                    "description": "Tags as an array of strings"
-                                                },
-                                                {
-                                                    "type": "string",
-                                                    "description": "Tags as a comma-separated string"
-                                                }
-                                            ],
-                                            "description": "Tags to categorize the memory. Can be provided as an array of strings [\"tag1\", \"tag2\"] or a comma-separated string \"tag1,tag2\"."
-                                        },
-                                        "type": {
-                                            "type": "string",
-                                            "description": "Optional type or category label for the memory, e.g., 'note', 'fact', 'reminder'."
-                                        }
-                                    }
+                                    "description": "Optional custom metadata fields."
                                 }
                             },
                             "required": ["content"]
@@ -938,7 +913,6 @@ class MemoryServer:
                         {
                             "content_hash": "abc123...",
                             "updates": {
-                                "memory_type": "reminder",
                                 "metadata": {
                                     "priority": "high",
                                     "due_date": "2024-01-15"
@@ -970,20 +944,15 @@ class MemoryServer:
                                             "items": {"type": "string"},
                                             "description": "Replace existing tags with this list."
                                         },
-                                        "memory_type": {
-                                            "type": "string",
-                                            "description": "Update the memory type (e.g., 'note', 'reminder', 'fact')."
-                                        },
                                         "metadata": {
                                             "type": "object",
-                                            "description": "Custom metadata fields to merge with existing metadata."
+                                            "description": "Merge custom metadata fields."
                                         }
                                     }
                                 },
                                 "preserve_timestamps": {
                                     "type": "boolean",
                                     "default": True,
-                                    "description": "Whether to preserve the original created_at timestamp (default: true)."
                                 }
                             },
                             "required": ["content_hash", "updates"]
@@ -1020,7 +989,6 @@ class MemoryServer:
                                 },
                                 "tags": {
                                     "type": "array",
-                                    "items": {"type": "string"},
                                     "description": "Optional tags to apply to all memories created from this document.",
                                     "default": []
                                 },
@@ -1033,11 +1001,6 @@ class MemoryServer:
                                     "type": "number",
                                     "description": "Characters to overlap between chunks (default: 200).",
                                     "default": 200
-                                },
-                                "memory_type": {
-                                    "type": "string",
-                                    "description": "Type label for created memories (default: 'document').",
-                                    "default": "document"
                                 }
                             },
                             "required": ["file_path"]
@@ -1063,12 +1026,9 @@ class MemoryServer:
                             "type": "object",
                             "properties": {
                                 "directory_path": {
-                                    "type": "string",
-                                    "description": "Path to the directory containing documents to ingest."
                                 },
                                 "tags": {
                                     "type": "array",
-                                    "items": {"type": "string"},
                                     "description": "Optional tags to apply to all memories created.",
                                     "default": []
                                 },
@@ -1203,26 +1163,24 @@ class MemoryServer:
 
     async def handle_store_memory(self, arguments: dict) -> List[types.TextContent]:
         content = arguments.get("content")
+        tags = arguments.get("tags", [])
         metadata = arguments.get("metadata", {})
-        
+
         if not content:
             return [types.TextContent(type="text", text="Error: Content is required")]
-        
+
         try:
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
-            
+
             # Normalize tags to a list
-            tags = metadata.get("tags", "")
             if isinstance(tags, str):
                 tags = [tag.strip() for tag in tags.split(",") if tag.strip()]
             elif isinstance(tags, list):
                 tags = [str(tag).strip() for tag in tags if str(tag).strip()]
             else:
-                tags = []  # If tags is neither string nor list, default to empty list
+                tags = []
 
-            sanitized_tags = storage.sanitized(tags)
-            
             # Add optional hostname tracking
             final_metadata = metadata.copy()
             if INCLUDE_HOSTNAME:
@@ -1232,25 +1190,24 @@ class MemoryServer:
                     hostname = client_hostname
                 else:
                     hostname = socket.gethostname()
-                    
+
                 source_tag = f"source:{hostname}"
                 if source_tag not in tags:
                     tags.append(source_tag)
                 final_metadata["hostname"] = hostname
-            
+
             # Create memory object
             content_hash = generate_content_hash(content, final_metadata)
             now = time.time()
             memory = Memory(
                 content=content,
                 content_hash=content_hash,
-                tags=tags,  # keep as a list for easier use in other methods
-                memory_type=final_metadata.get("type"),
-                metadata = {**final_metadata, "tags":sanitized_tags},  # include the stringified tags in the meta data
+                tags=tags,
+                metadata=final_metadata,
                 created_at=now,
                 created_at_iso=datetime.utcfromtimestamp(now).isoformat() + "Z"
             )
-            
+
             # Store memory
             success, message = await storage.store(memory)
             return [types.TextContent(type="text", text=message)]
@@ -1330,8 +1287,6 @@ class MemoryServer:
                     f"Hash: {memory.content_hash}",
                     f"Tags: {', '.join(memory.tags)}"
                 ]
-                if memory.memory_type:
-                    memory_info.append(f"Type: {memory.memory_type}")
                 memory_info.append("---")
                 formatted_results.append("\n".join(memory_info))
             
@@ -1502,7 +1457,6 @@ class MemoryServer:
             memory_info = [
                 f"Content: {memory.content}",
                 f"Hash: {memory.content_hash}",
-                f"Type: {memory.memory_type}",
                 f"Created: {memory.created_at_iso or 'N/A'}",
                 f"Updated: {memory.updated_at_iso or 'N/A'}"
             ]
@@ -2028,7 +1982,6 @@ class MemoryServer:
             tags = arguments.get("tags", [])
             chunk_size = arguments.get("chunk_size", 1000)
             chunk_overlap = arguments.get("chunk_overlap", 200)
-            memory_type = arguments.get("memory_type", "document")
             
             logger.info(f"Starting document ingestion: {file_path}")
             start_time = time.time()
@@ -2064,7 +2017,6 @@ class MemoryServer:
                         content=chunk.content,
                         content_hash=generate_content_hash(chunk.content, chunk.metadata),
                         tags=list(set(all_tags)),  # Remove duplicates
-                        memory_type=memory_type,
                         metadata=chunk.metadata
                     )
                     
@@ -2208,7 +2160,6 @@ class MemoryServer:
                                 content=chunk.content,
                                 content_hash=generate_content_hash(chunk.content, chunk.metadata),
                                 tags=list(set(all_tags)),  # Remove duplicates
-                                memory_type="document",
                                 metadata=chunk.metadata
                             )
                             

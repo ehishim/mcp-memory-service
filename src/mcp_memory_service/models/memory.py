@@ -34,7 +34,6 @@ class Memory:
     content: str
     content_hash: str
     tags: List[str] = field(default_factory=list)
-    memory_type: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     embedding: Optional[List[float]] = None
     
@@ -170,7 +169,6 @@ class Memory:
             "content": self.content,
             "content_hash": self.content_hash,
             "tags_str": ",".join(self.tags) if self.tags else "",
-            "type": self.memory_type,
             # Store timestamps in all formats for better compatibility
             "timestamp": float(self.created_at),  # Changed from int() to preserve precision
             "timestamp_float": self.created_at,  # Legacy timestamp (float)
@@ -207,20 +205,19 @@ class Memory:
         
         # Create metadata dictionary without special fields
         metadata = {
-            k: v for k, v in data.items() 
+            k: v for k, v in data.items()
             if k not in [
-                "content", "content_hash", "tags_str", "type",
+                "content", "content_hash", "tags_str",
                 "timestamp", "timestamp_float", "timestamp_str",
                 "created_at", "created_at_iso", "updated_at", "updated_at_iso"
             ]
         }
-        
+
         # Create memory instance with synchronized timestamps
         return cls(
             content=data["content"],
             content_hash=data["content_hash"],
             tags=[tag for tag in tags if tag],  # Filter out empty tags
-            memory_type=data.get("type"),
             metadata=metadata,
             embedding=embedding,
             created_at=created_at,

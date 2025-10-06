@@ -104,26 +104,25 @@ async def exact_match_retrieve(storage, content: str) -> List[Memory]:
         # SQLite-Vec backend implementation
         if hasattr(storage, 'conn') and storage.conn:
             cursor = storage.conn.execute('''
-                SELECT content_hash, content, tags, memory_type, metadata,
+                SELECT content_hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories WHERE content = ?
             ''', (content,))
-            
+
             memories = []
             for row in cursor.fetchall():
                 try:
-                    content_hash, db_content, tags_str, memory_type, metadata_str = row[:5]
-                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
-                    
+                    content_hash, db_content, tags_str, metadata_str = row[:4]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[4:]
+
                     # Parse tags and metadata
                     tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
                     metadata = json.loads(metadata_str) if metadata_str else {}
-                    
+
                     memory = Memory(
                         content=db_content,
                         content_hash=content_hash,
                         tags=tags,
-                        memory_type=memory_type,
                         metadata=metadata,
                         created_at=created_at,
                         updated_at=updated_at,

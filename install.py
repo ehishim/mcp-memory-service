@@ -1022,8 +1022,7 @@ def initialize_sqlite_vec_database(storage_path):
             test_memory = Memory(
                 content=test_content,
                 content_hash=generate_content_hash(test_content),
-                tags=["init", "system"],
-                memory_type="system"
+                tags=["init", "system"]
             )
             
             # Store test memory
@@ -2442,8 +2441,7 @@ async def test_wal_mode_coordination():
             test_memory = Memory(
                 content=content,
                 content_hash=generate_content_hash(content),
-                tags=["setup", "wal-test", "multi-client"],
-                memory_type="test"
+                tags=["setup", "wal-test", "multi-client"]
             )
             
             # Store memory
@@ -2469,8 +2467,7 @@ async def test_wal_mode_coordination():
             memory2 = Memory(
                 content=content2,
                 content_hash=generate_content_hash(content2),
-                tags=["setup", "client2"],
-                memory_type="test"
+                tags=["setup", "client2"]
             )
             
             success2, _ = await storage2.store(memory2)

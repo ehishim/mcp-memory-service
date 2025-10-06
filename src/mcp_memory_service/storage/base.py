@@ -74,7 +74,7 @@ class MemoryStorage(ABC):
             Tuple of (success, message)
             
         Note:
-            - Only metadata, tags, and memory_type can be updated
+            - Only metadata and tags can be updated
             - Content and content_hash cannot be modified
             - updated_at timestamp is always refreshed
             - created_at is preserved unless preserve_timestamps=False

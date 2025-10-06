@@ -184,18 +184,14 @@ logger.info(f"Using storage backend: {STORAGE_BACKEND}")
 
 # SQLite-vec specific configuration
 if STORAGE_BACKEND == 'sqlite_vec':
-    # Try multiple environment variable names for SQLite-vec path
-    sqlite_vec_path = None
-    for env_var in ['MCP_MEMORY_SQLITE_PATH', 'MCP_MEMORY_SQLITEVEC_PATH']:
-        if path := os.getenv(env_var):
-            sqlite_vec_path = path
-            logger.info(f"Using {env_var}={path} for SQLite-vec database path")
-            break
-    
+    sqlite_vec_path = os.getenv('MCP_MEMORY_SQLITE_PATH')
+
     # If no environment variable is set, use the default path
     if not sqlite_vec_path:
         sqlite_vec_path = os.path.join(BASE_DIR, 'sqlite_vec.db')
-        logger.info(f"No SQLite-vec path environment variable found, using default: {sqlite_vec_path}")
+        logger.info(f"No MCP_MEMORY_SQLITE_PATH set, using default: {sqlite_vec_path}")
+    else:
+        logger.info(f"Using MCP_MEMORY_SQLITE_PATH={sqlite_vec_path}")
     
     # Ensure directory exists for SQLite database
     sqlite_dir = os.path.dirname(sqlite_vec_path)

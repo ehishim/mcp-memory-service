@@ -590,7 +590,6 @@ class ChromaMemoryStorage(MemoryStorage):
                             content=doc,
                             content_hash=memory_meta["content_hash"],
                             tags=stored_tags,
-                            memory_type=memory_meta.get("type"),
                             # Restore timestamps with fallback logic
                             created_at=created_at,
                             created_at_iso=created_at_iso,
@@ -650,7 +649,6 @@ class ChromaMemoryStorage(MemoryStorage):
                             content=doc,
                             content_hash=memory_meta["content_hash"],
                             tags=stored_tags,
-                            memory_type=memory_meta.get("type"),
                             # Restore timestamps with fallback logic
                             created_at=created_at,
                             created_at_iso=created_at_iso,
@@ -868,7 +866,6 @@ class ChromaMemoryStorage(MemoryStorage):
             content_hash: Hash of the memory to update
             updates: Dictionary of metadata fields to update. Supported fields:
                     - tags: List[str] - Replace existing tags
-                    - memory_type: str - Update memory type
                     - metadata: Dict[str, Any] - Merge with existing metadata
                     - Any other custom metadata fields
             preserve_timestamps: Whether to preserve original created_at timestamp
@@ -910,8 +907,6 @@ class ChromaMemoryStorage(MemoryStorage):
                 else:
                     return False, "Tags must be provided as a list of strings"
             
-            if "memory_type" in updates:
-                updated_metadata["type"] = updates["memory_type"]
             
             if "metadata" in updates:
                 # Merge custom metadata
@@ -922,7 +917,7 @@ class ChromaMemoryStorage(MemoryStorage):
             
             # Handle other custom metadata fields (excluding protected fields)
             protected_fields = {
-                "content", "content_hash", "tags", "memory_type", "metadata",
+                "content", "content_hash", "tags", "metadata",
                 "embedding", "created_at", "created_at_iso", "updated_at", "updated_at_iso",
                 "timestamp", "timestamp_float", "timestamp_str"
             }
@@ -976,14 +971,12 @@ class ChromaMemoryStorage(MemoryStorage):
             updated_fields = []
             if "tags" in updates:
                 updated_fields.append("tags")
-            if "memory_type" in updates:
-                updated_fields.append("memory_type")
             if "metadata" in updates:
                 updated_fields.append("custom_metadata")
             
             # Add other custom fields
             for key in updates.keys():
-                if key not in protected_fields and key not in ["tags", "memory_type", "metadata"]:
+                if key not in protected_fields and key not in ["tags", "metadata"]:
                     updated_fields.append(key)
             
             updated_fields.append("updated_at")
@@ -1068,7 +1061,6 @@ class ChromaMemoryStorage(MemoryStorage):
                             content=results["documents"][0][i],
                             content_hash=metadata["content_hash"],
                             tags=tags,
-                            memory_type=metadata.get("memory_type", ""),
                             # Restore timestamps with fallback logic
                             created_at=created_at,
                             created_at_iso=created_at_iso,
@@ -1076,7 +1068,7 @@ class ChromaMemoryStorage(MemoryStorage):
                             updated_at_iso=updated_at_iso,
                             # Include additional metadata
                             metadata={k: v for k, v in metadata.items() 
-                                    if k not in ["content_hash", "tags", "memory_type", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
+                                    if k not in ["content_hash", "tags", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
                         )
                         
                         # Calculate cosine similarity from distance
@@ -1119,7 +1111,6 @@ class ChromaMemoryStorage(MemoryStorage):
                     content=results["documents"][i],
                     content_hash=metadata["content_hash"],
                     tags=tags,
-                    memory_type=metadata.get("type", ""),
                     # Restore timestamps with fallback logic
                     created_at=created_at,
                     created_at_iso=created_at_iso,
@@ -1255,7 +1246,7 @@ class ChromaMemoryStorage(MemoryStorage):
         # IMPORTANT: Store timestamp as float to preserve sub-second precision
         metadata = {
             "content_hash": memory.content_hash,
-            "memory_type": memory.memory_type or "",
+            
             "timestamp": float(memory.created_at),  # Changed from int() to float()
             "created_at_iso": memory.created_at_iso,
         }
@@ -1396,7 +1387,6 @@ class ChromaMemoryStorage(MemoryStorage):
                     content=results["documents"][0][i],
                     content_hash=metadata["content_hash"],
                     tags=tags,
-                    memory_type=metadata.get("memory_type", ""),
                     # Restore timestamps with fallback logic
                     created_at=created_at,
                     created_at_iso=created_at_iso,
@@ -1404,7 +1394,7 @@ class ChromaMemoryStorage(MemoryStorage):
                     updated_at_iso=updated_at_iso,
                     # Include additional metadata
                     metadata={k: v for k, v in metadata.items() 
-                             if k not in ["content_hash", "tags", "memory_type", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
+                             if k not in ["content_hash", "tags", "created_at", "created_at_iso", "updated_at", "updated_at_iso", "timestamp", "timestamp_float", "timestamp_str"]}
                 )
                 
                 # Calculate cosine similarity from distance

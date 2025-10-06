@@ -195,7 +195,6 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     content_hash TEXT UNIQUE NOT NULL,
                     content TEXT NOT NULL,
                     tags TEXT,
-                    memory_type TEXT,
                     metadata TEXT,
                     created_at REAL,
                     updated_at REAL,
@@ -217,7 +216,6 @@ class SqliteVecMemoryStorage(MemoryStorage):
             # Create indexes for better performance
             self.conn.execute('CREATE INDEX IF NOT EXISTS idx_content_hash ON memories(content_hash)')
             self.conn.execute('CREATE INDEX IF NOT EXISTS idx_created_at ON memories(created_at)')
-            self.conn.execute('CREATE INDEX IF NOT EXISTS idx_memory_type ON memories(memory_type)')
             
             logger.info(f"SQLite-vec storage initialized successfully with embedding dimension: {self.embedding_dimension}")
             
@@ -395,14 +393,13 @@ class SqliteVecMemoryStorage(MemoryStorage):
             def insert_memory():
                 cursor = self.conn.execute('''
                     INSERT INTO memories (
-                        content_hash, content, tags, memory_type,
+                        content_hash, content, tags,
                         metadata, created_at, updated_at, created_at_iso, updated_at_iso
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     memory.content_hash,
                     memory.content,
                     tags_str,
-                    memory.memory_type,
                     metadata_str,
                     memory.created_at,
                     memory.updated_at,
@@ -478,8 +475,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
             def search_memories():
                 # Try direct rowid join first
                 cursor = self.conn.execute('''
-                    SELECT m.content_hash, m.content, m.tags, m.memory_type, m.metadata,
-                           m.created_at, m.updated_at, m.created_at_iso, m.updated_at_iso, 
+                    SELECT m.content_hash, m.content, m.tags, m.metadata,
+                           m.created_at, m.updated_at, m.created_at_iso, m.updated_at_iso,
                            e.distance
                     FROM memories m
                     INNER JOIN (
@@ -507,8 +504,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
             for row in search_results:
                 try:
                     # Parse row data
-                    content_hash, content, tags_str, memory_type, metadata_str = row[:5]
-                    created_at, updated_at, created_at_iso, updated_at_iso, distance = row[5:]
+                    content_hash, content, tags_str, metadata_str = row[:4]
+                    created_at, updated_at, created_at_iso, updated_at_iso, distance = row[4:]
                     
                     # Parse tags and metadata
                     tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
@@ -519,7 +516,6 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         content=content,
                         content_hash=content_hash,
                         tags=tags,
-                        memory_type=memory_type,
                         metadata=metadata,
                         created_at=created_at,
                         updated_at=updated_at,
@@ -563,7 +559,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
             tag_params = [f"%{tag}%" for tag in tags]
             
             cursor = self.conn.execute(f'''
-                SELECT content_hash, content, tags, memory_type, metadata,
+                SELECT content_hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories
                 WHERE {tag_conditions}
@@ -573,8 +569,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
             results = []
             for row in cursor.fetchall():
                 try:
-                    content_hash, content, tags_str, memory_type, metadata_str = row[:5]
-                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+                    content_hash, content, tags_str, metadata_str = row[:4]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[4:]
                     
                     # Parse tags and metadata
                     memory_tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
@@ -584,7 +580,6 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         content=content,
                         content_hash=content_hash,
                         tags=memory_tags,
-                        memory_type=memory_type,
                         metadata=metadata,
                         created_at=created_at,
                         updated_at=updated_at,
@@ -626,7 +621,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
             tag_params = [f"%{tag}%" for tag in tags]
             
             cursor = self.conn.execute(f'''
-                SELECT content_hash, content, tags, memory_type, metadata,
+                SELECT content_hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories 
                 WHERE {tag_conditions}
@@ -636,7 +631,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
             results = []
             for row in cursor.fetchall():
                 try:
-                    content_hash, content, tags_str, memory_type, metadata_str, created_at, updated_at, created_at_iso, updated_at_iso = row
+                    content_hash, content, tags_str, metadata_str, created_at, updated_at, created_at_iso, updated_at_iso = row
                     
                     # Parse tags and metadata
                     memory_tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
@@ -646,7 +641,6 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         content=content,
                         content_hash=content_hash,
                         tags=memory_tags,
-                        memory_type=memory_type,
                         metadata=metadata,
                         created_at=created_at,
                         updated_at=updated_at,
@@ -705,7 +699,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 return None
             
             cursor = self.conn.execute('''
-                SELECT content_hash, content, tags, memory_type, metadata,
+                SELECT content_hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories WHERE content_hash = ?
             ''', (content_hash,))
@@ -714,8 +708,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
             if not row:
                 return None
             
-            content_hash, content, tags_str, memory_type, metadata_str = row[:5]
-            created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+            content_hash, content, tags_str, metadata_str = row[:4]
+            created_at, updated_at, created_at_iso, updated_at_iso = row[4:]
             
             # Parse tags and metadata
             tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
@@ -725,7 +719,6 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 content=content,
                 content_hash=content_hash,
                 tags=tags,
-                memory_type=memory_type,
                 metadata=metadata,
                 created_at=created_at,
                 updated_at=updated_at,
@@ -807,7 +800,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
             
             # Get current memory
             cursor = self.conn.execute('''
-                SELECT content, tags, memory_type, metadata, created_at, created_at_iso
+                SELECT content, tags, metadata, created_at, created_at_iso
                 FROM memories WHERE content_hash = ?
             ''', (content_hash,))
             
@@ -815,14 +808,13 @@ class SqliteVecMemoryStorage(MemoryStorage):
             if not row:
                 return False, f"Memory with hash {content_hash} not found"
             
-            content, current_tags, current_type, current_metadata_str, created_at, created_at_iso = row
+            content, current_tags, current_metadata_str, created_at, created_at_iso = row
             
             # Parse current metadata
             current_metadata = json.loads(current_metadata_str) if current_metadata_str else {}
             
             # Apply updates
             new_tags = current_tags
-            new_type = current_type
             new_metadata = current_metadata.copy()
             
             # Handle tag updates
@@ -833,9 +825,6 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     return False, "Tags must be provided as a list of strings"
             
             # Handle memory type updates
-            if "memory_type" in updates:
-                new_type = updates["memory_type"]
-            
             # Handle metadata updates
             if "metadata" in updates:
                 if isinstance(updates["metadata"], dict):
@@ -845,7 +834,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
             
             # Handle other custom fields
             protected_fields = {
-                "content", "content_hash", "tags", "memory_type", "metadata",
+                "content", "content_hash", "tags", "metadata",
                 "embedding", "created_at", "created_at_iso", "updated_at", "updated_at_iso"
             }
             
@@ -864,12 +853,11 @@ class SqliteVecMemoryStorage(MemoryStorage):
             # Update the memory
             self.conn.execute('''
                 UPDATE memories SET
-                    tags = ?, memory_type = ?, metadata = ?,
+                    tags = ?, metadata = ?,
                     updated_at = ?, updated_at_iso = ?,
                     created_at = ?, created_at_iso = ?
                 WHERE content_hash = ?
-            ''', (
-                new_tags, new_type, json.dumps(new_metadata),
+            ''', (new_tags, json.dumps(new_metadata),
                 now, now_iso, created_at, created_at_iso, content_hash
             ))
             
@@ -879,13 +867,11 @@ class SqliteVecMemoryStorage(MemoryStorage):
             updated_fields = []
             if "tags" in updates:
                 updated_fields.append("tags")
-            if "memory_type" in updates:
-                updated_fields.append("memory_type")
             if "metadata" in updates:
                 updated_fields.append("custom_metadata")
             
             for key in updates.keys():
-                if key not in protected_fields and key not in ["tags", "memory_type", "metadata"]:
+                if key not in protected_fields and key not in ["tags", "metadata"]:
                     updated_fields.append(key)
             
             updated_fields.append("updated_at")
@@ -992,7 +978,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     
                     # Build SQL query with time filtering
                     base_query = '''
-                        SELECT m.content_hash, m.content, m.tags, m.memory_type, m.metadata,
+                        SELECT m.content_hash, m.content, m.tags, m.metadata,
                                m.created_at, m.updated_at, m.created_at_iso, m.updated_at_iso, 
                                e.distance
                         FROM memories m
@@ -1018,8 +1004,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     for row in cursor.fetchall():
                         try:
                             # Parse row data
-                            content_hash, content, tags_str, memory_type, metadata_str = row[:5]
-                            created_at, updated_at, created_at_iso, updated_at_iso, distance = row[5:]
+                            content_hash, content, tags_str, metadata_str = row[:4]
+                            created_at, updated_at, created_at_iso, updated_at_iso, distance = row[4:]
                             
                             # Parse tags and metadata
                             tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
@@ -1030,7 +1016,6 @@ class SqliteVecMemoryStorage(MemoryStorage):
                                 content=content,
                                 content_hash=content_hash,
                                 tags=tags,
-                                memory_type=memory_type,
                                 metadata=metadata,
                                 created_at=created_at,
                                 updated_at=updated_at,
@@ -1061,7 +1046,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
             
             # Time-based filtering only (or fallback from failed semantic search)
             base_query = '''
-                SELECT content_hash, content, tags, memory_type, metadata,
+                SELECT content_hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories
             '''
@@ -1079,8 +1064,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
             results = []
             for row in cursor.fetchall():
                 try:
-                    content_hash, content, tags_str, memory_type, metadata_str = row[:5]
-                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+                    content_hash, content, tags_str, metadata_str = row[:4]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[4:]
                     
                     # Parse tags and metadata
                     tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
@@ -1090,7 +1075,6 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         content=content,
                         content_hash=content_hash,
                         tags=tags,
-                        memory_type=memory_type,
                         metadata=metadata,
                         created_at=created_at,
                         updated_at=updated_at,
@@ -1128,7 +1112,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 return []
             
             cursor = self.conn.execute('''
-                SELECT content_hash, content, tags, memory_type, metadata,
+                SELECT content_hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories 
                 WHERE content LIKE ?
@@ -1139,8 +1123,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
             memories = []
             for row in cursor.fetchall():
                 try:
-                    content_hash, content, tags_str, memory_type, metadata_str = row[:5]
-                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+                    content_hash, content, tags_str, metadata_str = row[:4]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[4:]
                     
                     # Parse tags and metadata
                     tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
@@ -1150,7 +1134,6 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         content=content,
                         content_hash=content_hash,
                         tags=tags,
-                        memory_type=memory_type,
                         metadata=metadata,
                         created_at=created_at,
                         updated_at=updated_at,
@@ -1237,7 +1220,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 return []
             
             cursor = self.conn.execute('''
-                SELECT content_hash, content, tags, memory_type, metadata,
+                SELECT content_hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories
                 ORDER BY created_at DESC
@@ -1246,8 +1229,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
             results = []
             for row in cursor.fetchall():
                 try:
-                    content_hash, content, tags_str, memory_type, metadata_str = row[:5]
-                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+                    content_hash, content, tags_str, metadata_str = row[:4]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[4:]
                     
                     # Parse tags and metadata
                     tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
@@ -1257,7 +1240,6 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         content=content,
                         content_hash=content_hash,
                         tags=tags,
-                        memory_type=memory_type,
                         metadata=metadata,
                         created_at=created_at,
                         updated_at=updated_at,
@@ -1283,7 +1265,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
         try:
             await self.initialize()
             cursor = self.conn.execute('''
-                SELECT content_hash, content, tags, memory_type, metadata,
+                SELECT content_hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories
                 WHERE created_at BETWEEN ? AND ?
@@ -1293,8 +1275,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
             results = []
             for row in cursor.fetchall():
                 try:
-                    content_hash, content, tags_str, memory_type, metadata_str = row[:5]
-                    created_at, updated_at, created_at_iso, updated_at_iso = row[5:]
+                    content_hash, content, tags_str, metadata_str = row[:4]
+                    created_at, updated_at, created_at_iso, updated_at_iso = row[4:]
                     
                     # Parse tags and metadata
                     tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
@@ -1304,7 +1286,6 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         content=content,
                         content_hash=content_hash,
                         tags=tags,
-                        memory_type=memory_type,
                         metadata=metadata,
                         created_at=created_at,
                         updated_at=updated_at,
@@ -1382,7 +1363,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
     def _row_to_memory(self, row) -> Optional[Memory]:
         """Convert database row to Memory object."""
         try:
-            content_hash, content, tags_str, memory_type, metadata_str, created_at, updated_at, created_at_iso, updated_at_iso = row
+            content_hash, content, tags_str, metadata_str, created_at, updated_at, created_at_iso, updated_at_iso = row
             
             # Parse tags
             tags = []
@@ -1408,7 +1389,6 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 content=content,
                 content_hash=content_hash,
                 tags=tags,
-                memory_type=memory_type,
                 metadata=metadata,
                 created_at=created_at,
                 updated_at=updated_at,
@@ -1436,7 +1416,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
             
             # Build query with optional limit and offset
             query = '''
-                SELECT content_hash, content, tags, memory_type, metadata,
+                SELECT content_hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
                 FROM memories
                 ORDER BY created_at DESC
