@@ -433,6 +433,13 @@ def main():
             ["List All", "Semantic Search", "Search by Tags", "Search by Content", "Get by Hash"]
         )
 
+        # Reset page to 1 when search mode changes
+        if 'previous_search_mode' not in st.session_state:
+            st.session_state.previous_search_mode = search_mode
+        elif st.session_state.previous_search_mode != search_mode:
+            st.session_state.current_page = 1
+            st.session_state.previous_search_mode = search_mode
+
         if search_mode == "Semantic Search":
             query_input = st.text_input("Search Query", placeholder="e.g., 'docker configurations' or 'last week'")
             n_results = st.slider("Max Results", min_value=1, max_value=100, value=10)
@@ -552,7 +559,9 @@ def main():
             st.session_state.current_page += 1
             st.rerun()
     with col4:
-        st.metric("Page", f"{st.session_state.current_page} / {total_pages}")
+        # Show "0 / 0" when no results, otherwise show current page
+        current_page_display = st.session_state.current_page if total_count > 0 else 0
+        st.metric("Page", f"{current_page_display} / {total_pages}")
 
     st.divider()
 
