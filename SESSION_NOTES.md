@@ -1134,5 +1134,154 @@ Next button enabled to navigate to pages 2 and 3
 ### Commits
 
 - `41c2b20` - fix: L2 distance relevance score calculation for semantic search
-- `cbc7c3d` - fix: update_memory embedding table name and search total_count
+- `fc63985` - fix: update_memory embedding table name and search total_count
+- `200adcb` - fix: recall() total_count using k=limit instead of k=4096
+
+---
+
+## 🐛 Bug #18 Follow-up: recall() Count Query Fix (2025-10-06)
+
+**Session Focus:** User tested admin UI after Bug #18 fix and found pagination still showing "1 / 1"
+
+### Issue Verification
+
+User tested with curl after the search() fix was deployed:
+```bash
+curl http://mevault:8030/mcp -H "Accept: application/json, text/event-stream" \
+  -d '{"method":"tools/call","params":{"name":"recall_memory","arguments":{"query":"mau","limit":100}}}'
+
+Response:
+"pagination": {
+  "total": 100,        # ❌ Wrong - should be 237+
+  "limit": 100,
+  "offset": 0,
+  "has_more": false    # ❌ Wrong - there ARE more results
+}
+```
+
+**Admin UI still showing**: "Total Results: 100, Page 1 / 1"
+
+### Root Cause Discovery
+
+The `search()` method was fixed in Bug #18, but admin UI uses `recall_memory` which calls the `recall()` method. Investigation revealed:
+
+**File:** `src/mcp_memory_service/storage/sqlite_vec.py:1202-1217`
+
+**Problem:**
+```python
+# Line 1202 - k_value capped by pagination limit
+k_value = min(4096, (limit or 100) + offset)  # With limit=100, k_value=100
+
+# Lines 1205-1210 - COUNT query uses this capped k_value
+count_query = '''
+    SELECT COUNT(*) FROM memories m
+    JOIN (
+        SELECT rowid
+        FROM memory_embeddings
+        WHERE content_embedding MATCH ? AND k = ?  # ❌ Uses k_value (100)
+    ) e ON m.rowid = e.rowid
+'''
+count_params = [serialize_float32(query_embedding), k_value] + params
+```
+
+**Impact:**
+- With `limit=100, offset=0`: `k_value = 100`
+- COUNT query: `k = 100` → returns max 100 results
+- Actual matches: 237+ memories containing "mau"
+- Result: `total_count = 100` instead of 237
+
+**Why this happened:**
+- Bug #18 fixed `search()` method to use `k=4096` in COUNT query
+- But `recall()` method still had the same bug with dynamic k_value
+- Both methods have identical count logic, but only search() was fixed
+
+### Solution
+
+**File:** `src/mcp_memory_service/storage/sqlite_vec.py:1210, 1216`
+
+**Fix:**
+```python
+# Lines 1204-1217 - Always use k=4096 for accurate total count
+# First, get total count of matching results (always use k=4096 for accurate count)
+count_query = '''
+    SELECT COUNT(*) FROM memories m
+    JOIN (
+        SELECT rowid
+        FROM memory_embeddings
+        WHERE content_embedding MATCH ? AND k = 4096  # ✅ Fixed to 4096
+    ) e ON m.rowid = e.rowid
+'''
+count_params = [serialize_float32(query_embedding)] + params  # ✅ Removed k_value
+total_count = self.conn.execute(count_query, count_params).fetchone()[0]
+```
+
+**Changes:**
+1. Hardcoded `k = 4096` in COUNT query (line 1210)
+2. Removed `k_value` from count_params (line 1216)
+3. Added explanatory comment about k=4096 usage
+
+### Testing Results
+
+**Before fix:**
+```json
+{
+  "pagination": {
+    "total": 100,
+    "limit": 100,
+    "offset": 0,
+    "has_more": false
+  }
+}
+```
+Admin UI: "Total Results: 100, Page 1 / 1"
+
+**After fix (expected):**
+```json
+{
+  "pagination": {
+    "total": 237,
+    "limit": 100,
+    "offset": 0,
+    "has_more": true
+  }
+}
+```
+Admin UI: "Total Results: 237, Page 1 / 3"
+
+### Files Modified
+
+1. **src/mcp_memory_service/storage/sqlite_vec.py**
+   - Line 1210: Changed `k = ?` to `k = 4096` in recall() COUNT query
+   - Line 1216: Removed `k_value` from count_params array
+   - Line 1204: Added clarifying comment about k=4096 usage
+
+### Architecture Consistency
+
+Both `search()` and `recall()` now use identical COUNT logic:
+```python
+# search() method (lines 503-511) - Fixed in Bug #18
+count_query = '''WHERE content_embedding MATCH ? AND k = 4096'''
+total_count = conn.execute(count_query, (serialize_float32(query_embedding),))
+
+# recall() method (lines 1205-1217) - Fixed in this commit
+count_query = '''WHERE content_embedding MATCH ? AND k = 4096'''
+total_count = conn.execute(count_query, [serialize_float32(query_embedding)] + params)
+```
+
+**Key principle**: COUNT queries always use `k=4096` to get actual total, regardless of pagination `limit`.
+
+### User Feedback
+
+User confirmed: "seems to work" after testing with curl
+
+### Key Learnings
+
+1. **Duplicate logic requires duplicate fixes** - search() and recall() had same bug
+2. **Test both code paths** - Admin UI uses recall_memory, not search
+3. **k parameter behavior** - Must use max k=4096 for COUNT, can use smaller k for actual results
+4. **Pagination total != result count** - Total should reflect all matches, not just fetched results
+
+### Commits
+
+- `200adcb` - fix: recall() total_count using k=limit instead of k=4096
 
