@@ -470,19 +470,28 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="recall_memory",
-                        description="""Retrieve memories using natural language time expressions and optional semantic search.
-                        
-                        Supports various time-related expressions such as:
-                        - "yesterday", "last week", "2 days ago"
-                        - "last summer", "this month", "last January"
-                        - "spring", "winter", "Christmas", "Thanksgiving"
-                        - "morning", "evening", "yesterday afternoon"
-                        
+                        description="""Unified memory retrieval with semantic search and natural language time filtering.
+
+                        This tool handles all memory retrieval scenarios:
+                        - Pure semantic search: "docker configurations", "python examples"
+                        - Time-based filtering: "last week", "yesterday afternoon", "January 2024"
+                        - Combined search: "docker from last month", "python code from yesterday"
+
+                        Supported time expressions:
+                        - Relative: "yesterday", "last week", "2 days ago", "3 months ago"
+                        - Seasonal: "last summer", "this winter", "spring"
+                        - Named dates: "Christmas", "Thanksgiving", "New Year"
+                        - Specific: "January 2024", "last Monday", "yesterday morning"
+
                         Examples:
                         {
-                            "query": "recall what I stored last week"
+                            "query": "docker configurations"
                         }
-                        
+
+                        {
+                            "query": "last week"
+                        }
+
                         {
                             "query": "find information about databases from two months ago",
                             "n_results": 5
@@ -493,32 +502,7 @@ class MemoryServer:
                             "properties": {
                                 "query": {
                                     "type": "string",
-                                    "description": "Natural language query specifying the time frame or content to recall, e.g., 'last week', 'yesterday afternoon', or a topic."
-                                },
-                                "n_results": {
-                                    "type": "number",
-                                    "default": 5,
-                                    "description": "Maximum number of results to return."
-                                }
-                            },
-                            "required": ["query"]
-                        }
-                    ),
-                    types.Tool(
-                        name="retrieve_memory",
-                        description="""Find relevant memories based on query.
-
-                        Example:
-                        {
-                            "query": "find this memory",
-                            "n_results": 5
-                        }""",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "query": {
-                                    "type": "string",
-                                    "description": "Search query to find relevant memories based on content."
+                                    "description": "Search query with optional time expressions. Can be pure semantic search, pure time filtering, or combined."
                                 },
                                 "n_results": {
                                     "type": "number",
@@ -626,91 +610,6 @@ class MemoryServer:
                         }
                     ),
                     types.Tool(
-                        name="cleanup_duplicates",
-                        description="Find and remove duplicate entries",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {}
-                        }
-                    ),
-                    types.Tool(
-                        name="get_embedding",
-                        description="""Get raw embedding vector for content.
-
-                        Example:
-                        {
-                            "content": "text to embed"
-                        }""",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "content": {
-                                    "type": "string",
-                                    "description": "Text content to generate an embedding vector for."
-                                }
-                            },
-                            "required": ["content"]
-                        }
-                    ),
-                    types.Tool(
-                        name="check_embedding_model",
-                        description="Check if embedding model is loaded and working",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {}
-                        }
-                    ),
-                    types.Tool(
-                        name="debug_retrieve",
-                        description="""Retrieve memories with debug information.
-
-                        Example:
-                        {
-                            "query": "debug this",
-                            "n_results": 5,
-                            "similarity_threshold": 0.0
-                        }""",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "query": {
-                                    "type": "string",
-                                    "description": "Search query for debugging retrieval, e.g., a phrase or keyword."
-                                },
-                                "n_results": {
-                                    "type": "number",
-                                    "default": 5,
-                                    "description": "Maximum number of results to return."
-                                },
-                                "similarity_threshold": {
-                                    "type": "number",
-                                    "default": 0.0,
-                                    "description": "Minimum similarity score threshold for results (0.0 to 1.0)."
-                                }
-                            },
-                            "required": ["query"]
-                        }
-                    ),
-                    types.Tool(
-                        name="exact_match_retrieve",
-                        description="""Retrieve memories using exact content match.
-
-                        Example:
-                        {
-                            "content": "find exactly this"
-                        }""",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "content": {
-                                    "type": "string",
-                                    "description": "Exact content string to match against stored memories."
-                                }
-                            },
-                            "required": ["content"]
-                        }
-                    ),
-                    types.Tool(
                         name="get_by_hash",
                         description="""Retrieve a specific memory by its content hash.
 
@@ -787,40 +686,8 @@ class MemoryServer:
                         }
                     ),
                     types.Tool(
-                        name="recall_by_timeframe",
-                        description="""Retrieve memories within a specific timeframe.
-
-                        Example:
-                        {
-                            "start_date": "2024-01-01",
-                            "end_date": "2024-01-31",
-                            "n_results": 5
-                        }""",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "start_date": {
-                                    "type": "string",
-                                    "format": "date",
-                                    "description": "Start date (inclusive) in YYYY-MM-DD format."
-                                },
-                                "end_date": {
-                                    "type": "string",
-                                    "format": "date",
-                                    "description": "End date (inclusive) in YYYY-MM-DD format."
-                                },
-                                "n_results": {
-                                    "type": "number",
-                                    "default": 5,
-                                    "description": "Maximum number of results to return."
-                                }
-                            },
-                            "required": ["start_date"]
-                        }
-                    ),
-                    types.Tool(
-                        name="dashboard_create_backup",
-                        description="Dashboard: Create database backup and return JSON format.",
+                        name="backup_memory",
+                        description="Create a database backup with all memories and metadata. Returns backup location and statistics.",
                         inputSchema={"type": "object", "properties": {}}
                     ),
                     types.Tool(
@@ -1011,8 +878,6 @@ class MemoryServer:
                 
                 if name == "store_memory":
                     return await self.handle_store_memory(arguments)
-                elif name == "retrieve_memory":
-                    return await self.handle_retrieve_memory(arguments)
                 elif name == "recall_memory":
                     return await self.handle_recall_memory(arguments)
                 elif name == "search_by_tag":
@@ -1021,16 +886,6 @@ class MemoryServer:
                     return await self.handle_delete_memory(arguments)
                 elif name == "delete_by_tag":
                     return await self.handle_delete_by_tag(arguments)
-                elif name == "cleanup_duplicates":
-                    return await self.handle_cleanup_duplicates(arguments)
-                elif name == "get_embedding":
-                    return await self.handle_get_embedding(arguments)
-                elif name == "check_embedding_model":
-                    return await self.handle_check_embedding_model(arguments)
-                elif name == "debug_retrieve":
-                    return await self.handle_debug_retrieve(arguments)
-                elif name == "exact_match_retrieve":
-                    return await self.handle_exact_match_retrieve(arguments)
                 elif name == "get_by_hash":
                     return await self.handle_get_by_hash(arguments)
                 elif name == "search_by_content":
@@ -1040,11 +895,9 @@ class MemoryServer:
                 elif name == "check_database_health":
                     logger.info("Calling handle_check_database_health")
                     return await self.handle_check_database_health(arguments)
-                elif name == "recall_by_timeframe":
-                    return await self.handle_recall_by_timeframe(arguments)
-                elif name == "dashboard_create_backup":
-                    logger.info("Calling handle_dashboard_create_backup")
-                    return await self.handle_dashboard_create_backup(arguments)
+                elif name == "backup_memory":
+                    logger.info("Calling handle_backup_memory")
+                    return await self.handle_backup_memory(arguments)
                 elif name == "update_memory_metadata":
                     logger.info("Calling handle_update_memory_metadata")
                     return await self.handle_update_memory_metadata(arguments)
@@ -1137,49 +990,6 @@ class MemoryServer:
             logger.error(f"Error storing memory: {str(e)}\n{traceback.format_exc()}")
             return [types.TextContent(type="text", text=f"Error storing memory: {str(e)}")]
     
-    async def handle_retrieve_memory(self, arguments: dict) -> List[types.TextContent]:
-        query = arguments.get("query")
-        n_results = arguments.get("n_results", 5)
-        
-        if not query:
-            return [types.TextContent(type="text", text="Error: Query is required")]
-        
-        try:
-            # Initialize storage lazily when needed
-            storage = await self._ensure_storage_initialized()
-            
-            # Track performance
-            start_time = time.time()
-            results = await storage.retrieve(query, n_results)
-            query_time_ms = (time.time() - start_time) * 1000
-            
-            # Record query time for performance monitoring
-            self.record_query_time(query_time_ms)
-            
-            if not results:
-                return [types.TextContent(type="text", text="No matching memories found")]
-            
-            formatted_results = []
-            for i, result in enumerate(results):
-                memory_info = [
-                    f"Memory {i+1}:",
-                    f"Content: {result.memory.content}",
-                    f"Hash: {result.memory.content_hash}",
-                    f"Relevance Score: {result.relevance_score:.2f}"
-                ]
-                if result.memory.tags:
-                    memory_info.append(f"Tags: {', '.join(result.memory.tags)}")
-                memory_info.append("---")
-                formatted_results.append("\n".join(memory_info))
-            
-            return [types.TextContent(
-                type="text",
-                text="Found the following memories:\n\n" + "\n".join(formatted_results)
-            )]
-        except Exception as e:
-            logger.error(f"Error retrieving memories: {str(e)}\n{traceback.format_exc()}")
-            return [types.TextContent(type="text", text=f"Error retrieving memories: {str(e)}")]
-
     async def handle_search_by_tag(self, arguments: dict) -> List[types.TextContent]:
         tags = arguments.get("tags", [])
         match_all = arguments.get("match_all", False)
@@ -1283,16 +1093,6 @@ class MemoryServer:
             logger.error(f"Error deleting by tag: {str(e)}\n{traceback.format_exc()}")
             return [types.TextContent(type="text", text=f"Error deleting by tag: {str(e)}")]
 
-
-    async def handle_cleanup_duplicates(self, arguments: dict) -> List[types.TextContent]:
-        try:
-            # Initialize storage lazily when needed
-            storage = await self._ensure_storage_initialized()
-            count, message = await storage.cleanup_duplicates()
-            return [types.TextContent(type="text", text=message)]
-        except Exception as e:
-            logger.error(f"Error cleaning up duplicates: {str(e)}\n{traceback.format_exc()}")
-            return [types.TextContent(type="text", text=f"Error cleaning up duplicates: {str(e)}")]
 
     async def handle_update_memory_metadata(self, arguments: dict) -> List[types.TextContent]:
         """Handle memory metadata update requests."""
@@ -1750,71 +1550,6 @@ class MemoryServer:
                 text=f"Error checking database health: {str(e)}"
             )]
 
-    async def handle_recall_by_timeframe(self, arguments: dict) -> List[types.TextContent]:
-        """Handle recall by timeframe requests."""
-        from datetime import datetime
-        
-        try:
-            # Initialize storage lazily when needed
-            storage = await self._ensure_storage_initialized()
-            
-            start_date = datetime.fromisoformat(arguments["start_date"]).date()
-            end_date = datetime.fromisoformat(arguments.get("end_date", arguments["start_date"])).date()
-            n_results = arguments.get("n_results", 5)
-            
-            # Get timestamp range
-            start_timestamp = datetime(start_date.year, start_date.month, start_date.day).timestamp()
-            end_timestamp = datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59).timestamp()
-            
-            # Log the timestamp values for debugging
-            logger.info(f"Recall by timeframe: {start_date} to {end_date}")
-            logger.info(f"Start timestamp: {start_timestamp} ({datetime.fromtimestamp(start_timestamp).strftime('%Y-%m-%d %H:%M:%S')})")
-            logger.info(f"End timestamp: {end_timestamp} ({datetime.fromtimestamp(end_timestamp).strftime('%Y-%m-%d %H:%M:%S')})")
-            
-            # Retrieve memories with proper parameters - query is None because this is pure time-based filtering
-            results = await storage.recall(
-                query=None,
-                n_results=n_results,
-                start_timestamp=start_timestamp,
-                end_timestamp=end_timestamp
-            )
-            
-            if not results:
-                return [types.TextContent(type="text", text=f"No memories found from {start_date} to {end_date}")]
-            
-            formatted_results = []
-            for i, result in enumerate(results):
-                memory_timestamp = result.memory.timestamp
-                memory_info = [
-                    f"Memory {i+1}:",
-                ]
-                
-                # Add timestamp if available
-                if memory_timestamp:
-                    memory_info.append(f"Timestamp: {memory_timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
-                
-                memory_info.extend([
-                    f"Content: {result.memory.content}",
-                    f"Hash: {result.memory.content_hash}"
-                ])
-                
-                if result.memory.tags:
-                    memory_info.append(f"Tags: {', '.join(result.memory.tags)}")
-                memory_info.append("---")
-                formatted_results.append("\n".join(memory_info))
-            
-            return [types.TextContent(
-                type="text",
-                text=f"Found {len(results)} memories from {start_date} to {end_date}:\n\n" + "\n".join(formatted_results)
-            )]
-            
-        except Exception as e:
-            logger.error(f"Error in recall_by_timeframe: {str(e)}\n{traceback.format_exc()}")
-            return [types.TextContent(
-                type="text",
-                text=f"Error recalling memories: {str(e)}"
-            )]
-
     async def handle_ingest_document(self, arguments: dict) -> List[types.TextContent]:
         """Handle document ingestion requests."""
         try:
@@ -2067,119 +1802,8 @@ class MemoryServer:
                 text=f"Error ingesting directory: {str(e)}"
             )]
 
-    async def handle_check_embedding_model(self, arguments: dict) -> List[types.TextContent]:
-        try:
-            # Initialize storage lazily when needed
-            storage = await self._ensure_storage_initialized()
-            
-            from .utils.debug import check_embedding_model
-            result = check_embedding_model(storage)
-            return [types.TextContent(
-                type="text",
-                text=f"Embedding model status:\n{json.dumps(result, indent=2)}"
-            )]
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error checking model: {str(e)}")]
-
-    async def handle_debug_retrieve(self, arguments: dict) -> List[types.TextContent]:
-        query = arguments.get("query")
-        n_results = arguments.get("n_results", 5)
-        similarity_threshold = arguments.get("similarity_threshold", 0.0)
-        
-        if not query:
-            return [types.TextContent(type="text", text="Error: Query is required")]
-        
-        try:
-            # Initialize storage lazily when needed
-            storage = await self._ensure_storage_initialized()
-            
-            from .utils.debug import debug_retrieve_memory
-            results = await debug_retrieve_memory(
-                storage,
-                query,
-                n_results,
-                similarity_threshold
-            )
-            
-            if not results:
-                return [types.TextContent(type="text", text="No matching memories found")]
-            
-            formatted_results = []
-            for i, result in enumerate(results):
-                memory_info = [
-                    f"Memory {i+1}:",
-                    f"Content: {result.memory.content}",
-                    f"Score: {result.relevance_score:.4f}",
-                    f"Hash: {result.memory.content_hash}"
-                ]
-                
-                if result.memory.tags:
-                    memory_info.append(f"Tags: {', '.join(result.memory.tags)}")
-                memory_info.append("---")
-                formatted_results.append("\n".join(memory_info))
-            
-            return [types.TextContent(
-                type="text",
-                text="Debug retrieval results:\n\n" + "\n".join(formatted_results)
-            )]
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error in debug retrieve: {str(e)}")]
-
-    async def handle_exact_match_retrieve(self, arguments: dict) -> List[types.TextContent]:
-        content = arguments.get("content")
-        if not content:
-            return [types.TextContent(type="text", text="Error: Content is required")]
-        
-        try:
-            # Initialize storage lazily when needed
-            storage = await self._ensure_storage_initialized()
-            
-            from .utils.debug import exact_match_retrieve
-            memories = await exact_match_retrieve(storage, content)
-            
-            if not memories:
-                return [types.TextContent(type="text", text="No exact matches found")]
-            
-            formatted_results = []
-            for i, memory in enumerate(memories):
-                memory_info = [
-                    f"Memory {i+1}:",
-                    f"Content: {memory.content}",
-                    f"Hash: {memory.content_hash}"
-                ]
-                
-                if memory.tags:
-                    memory_info.append(f"Tags: {', '.join(memory.tags)}")
-                memory_info.append("---")
-                formatted_results.append("\n".join(memory_info))
-            
-            return [types.TextContent(
-                type="text",
-                text="Found the following exact matches:\n\n" + "\n".join(formatted_results)
-            )]
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error in exact match retrieve: {str(e)}")]
-
-    async def handle_get_embedding(self, arguments: dict) -> List[types.TextContent]:
-        content = arguments.get("content")
-        if not content:
-            return [types.TextContent(type="text", text="Error: Content is required")]
-        
-        try:
-            # Initialize storage lazily when needed
-            storage = await self._ensure_storage_initialized()
-            
-            from .utils.debug import get_raw_embedding
-            result = get_raw_embedding(storage, content)
-            return [types.TextContent(
-                type="text",
-                text=f"Embedding results:\n{json.dumps(result, indent=2)}"
-            )]
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error getting embedding: {str(e)}")]
-
-    async def handle_dashboard_create_backup(self, arguments: dict) -> List[types.TextContent]:
-        """Dashboard version that creates backup and returns JSON."""
+    async def handle_backup_memory(self, arguments: dict) -> List[types.TextContent]:
+        """Create database backup and return JSON with location and stats."""
         logger.info("=== EXECUTING DASHBOARD_CREATE_BACKUP ===")
         try:
             import shutil
