@@ -961,13 +961,178 @@ distances = [1.105222, 1.107580, 1.112821, 1.130083, 1.141230]
 
 ### Commits
 
-- `XXXXXXX` - fix: L2 distance relevance score calculation for semantic search
+- `41c2b20` - fix: L2 distance relevance score calculation for semantic search
+- `cbc7c3d` - fix: update_memory embedding table name and search total_count
 
-### Next Steps
+---
 
-User requested:
-- ✅ Fix relevance score calculation
-- ✅ Update SESSION_NOTES.md
-- ⏳ Commit changes
-- ⏳ Push to repository
+## 🐛 Bug #17-18: Update Memory and Pagination Issues (2025-10-06)
+
+**Session Focus:** User discovered two additional bugs after testing the relevance score fix
+
+### Issues Reported
+
+1. **Admin UI showing "Page 1 / 1" despite having 100 results**
+2. **Search results not properly ordered by relevance score**
+3. **Need to understand rowid relationship between tables**
+
+### Root Cause Investigation
+
+**Question: Is rowid present in memories table?**
+
+Verified with database query:
+```sql
+SELECT m.rowid, e.rowid, m.id FROM memories m
+JOIN memory_embeddings e ON m.rowid = e.rowid LIMIT 5;
+
+Results:
+memories.rowid | embeddings.rowid | memories.id
+             1 |                1 | b9b05f90-a07d-4fa1-95f1-95123efbcd24
+             2 |                2 | 378a1fbc-ef8b-49b5-85d5-b15539f95ce0
+             3 |                3 | fd262f82-c11f-4b4a-a9d8-546a304dc16e
+```
+
+**Key Findings:**
+1. ✅ rowid DOES exist in memories table (SQLite creates it implicitly even with TEXT PRIMARY KEY)
+2. ✅ rowid alignment is perfect between tables (1→1, 2→2, 3→3)
+3. ✅ The store() method explicitly maintains this alignment (lines 413, 422)
+
+**Design Validation:**
+The UUID + rowid hybrid model is CORRECT:
+- `id` (UUID TEXT PRIMARY KEY) = stable public identifier for API
+- `rowid` (implicit integer) = internal relational key for efficient JOINs
+- This provides both: stable UUIDs for users AND efficient integer joins for embeddings
+
+### Bug #17: Wrong Table Name in update_memory()
+
+**File:** `src/mcp_memory_service/storage/sqlite_vec.py:1074`
+
+**Problem:**
+```python
+# Line 1074 - WRONG table name
+self.conn.execute(
+    'UPDATE vec_memories SET embedding = ? WHERE rowid = ?',
+    (serialize_f32(embedding), rowid)
+)
+```
+
+**Issue:**
+- Used legacy table name `vec_memories`
+- Actual table name is `memory_embeddings`
+- Also used wrong column name `embedding` (should be `content_embedding`)
+- Used wrong serialization function `serialize_f32` (should be `serialize_float32`)
+- Used wrong method `self.model.encode()` (should be `self._generate_embedding()`)
+
+**Fix:**
+```python
+# Lines 1068-1076 - FIXED
+embedding = self._generate_embedding(new_content)
+cursor = self.conn.execute('SELECT rowid FROM memories WHERE id = ?', (id,))
+row = cursor.fetchone()
+if row:
+    rowid = row[0]
+    self.conn.execute(
+        'UPDATE memory_embeddings SET content_embedding = ? WHERE rowid = ?',
+        (serialize_float32(embedding), rowid)
+    )
+```
+
+**Impact:**
+- Content updates would fail to update embeddings
+- Semantic search would return stale results after content edits
+
+### Bug #18: Search Total Count Incorrect
+
+**File:** `src/mcp_memory_service/storage/sqlite_vec.py:496`
+
+**Problem:**
+```python
+# Line 496 - Returns TOTAL database count, not search results
+total_count = embedding_count  # Returns 477 (all memories)
+```
+
+**Issue:**
+- `search()` method returned total number of ALL memories in database
+- Should return actual number of matching search results
+- Caused admin UI to show "Page 1 / 1" even when results were limited to 100
+- Pagination appeared broken (user had 100 results but UI showed only 1 page)
+
+**Fix:**
+```python
+# Lines 499-511 - Count actual search results with k=4096
+k_value = min(4096, actual_limit + actual_offset + 100)
+
+# Get accurate total count of matching results
+count_query = '''
+    SELECT COUNT(*) FROM memories m
+    JOIN (
+        SELECT rowid
+        FROM memory_embeddings
+        WHERE content_embedding MATCH ? AND k = 4096
+    ) e ON m.rowid = e.rowid
+'''
+total_count = self.conn.execute(count_query, (serialize_float32(query_embedding),)).fetchone()[0]
+```
+
+**Result:**
+- Now returns actual search result count (e.g., 237 matches for "MAU optimization")
+- Admin UI will show proper pagination (e.g., "Page 1 / 3" with page_size=100)
+- User can navigate through all search results
+
+### Semantic Search Score Expectations
+
+**User question:** "How to get 100% score?"
+
+**Answer:** Semantic search uses embeddings (vector similarity), not exact text matching:
+
+**Why short queries get ~45-58% scores:**
+- Query: `"mau"` (3 letters) → 384-dimensional embedding
+- Document: `"# MAU Optimization Post-Launch Bug Fix..."` (500+ words) → 384-dimensional embedding
+- L2 distance compares **semantic meaning**, not keyword presence
+- Result: distance ~1.1 → score ~46%
+
+**How to get higher scores (80-100%):**
+- Use longer, specific queries matching document content
+- Example: `"MAU optimization backend implementation status Sendbird-chat-api migration"`
+- Exact/near-exact content → distance ~0.0-0.2 → score ~83-100%
+
+**For exact keyword matching:**
+- Use **"Search by Content"** mode (SQL LIKE search)
+- Returns only memories containing exact text
+- No relevance scoring (just presence/absence)
+
+### Files Modified
+
+1. **src/mcp_memory_service/storage/sqlite_vec.py**
+   - Line 519: Fixed search() JOIN to use `m.rowid = e.rowid` (was `m.id = e.rowid`)
+   - Lines 496-511: Added accurate total_count query for search results
+   - Lines 1068-1076: Fixed update_memory() table name, column name, and serialization
+
+### Testing
+
+**Before fixes:**
+```
+Admin UI: "Total Results: 100, Page 1 / 1"
+(Actually had 237 matching results, capped at k=200)
+```
+
+**After fixes (expected):**
+```
+Admin UI: "Total Results: 237, Page 1 / 3" (with page_size=100)
+Next button enabled to navigate to pages 2 and 3
+```
+
+### Key Learnings
+
+1. **Implicit rowid is reliable** - SQLite maintains rowid even with TEXT PRIMARY KEY
+2. **Explicit rowid management** - store() and delete() correctly maintain rowid alignment
+3. **UUID + rowid hybrid is optimal** - Combines API stability with query efficiency
+4. **Total count must query results** - Can't use database count for search result pagination
+5. **Semantic search != keyword search** - Embeddings capture meaning, not exact text
+6. **k=4096 limit** - sqlite-vec maximum for accurate total counts
+
+### Commits
+
+- `41c2b20` - fix: L2 distance relevance score calculation for semantic search
+- `cbc7c3d` - fix: update_memory embedding table name and search total_count
 

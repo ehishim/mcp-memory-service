@@ -492,19 +492,26 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 logger.warning("No embeddings found in database. Memories may have been stored without embeddings.")
                 return [], 0
 
-            # Get total count of memories for pagination
-            total_count = embedding_count
-
             # Apply pagination - use limit if provided, otherwise use n_results
             actual_limit = limit if limit is not None else n_results
             actual_offset = offset if offset is not None else 0
 
+            # Cap k at 4096 (sqlite-vec limit) to get accurate total count
+            k_value = min(4096, actual_limit + actual_offset + 100)
+
+            # Get accurate total count of matching results
+            count_query = '''
+                SELECT COUNT(*) FROM memories m
+                JOIN (
+                    SELECT rowid
+                    FROM memory_embeddings
+                    WHERE content_embedding MATCH ? AND k = 4096
+                ) e ON m.rowid = e.rowid
+            '''
+            total_count = self.conn.execute(count_query, (serialize_float32(query_embedding),)).fetchone()[0]
+
             # Perform vector similarity search using JOIN with retry logic
             def search_memories():
-                # Try direct rowid join first with pagination
-                # Note: sqlite-vec k parameter controls initial candidates, we filter afterward
-                # Use a larger k to ensure we have enough candidates after offset
-                k_value = actual_limit + actual_offset + 100
 
                 cursor = self.conn.execute('''
                     SELECT m.id, m.hash, m.content, m.tags, m.metadata,
@@ -516,7 +523,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         FROM memory_embeddings
                         WHERE content_embedding MATCH ? AND k = ?
                         ORDER BY distance
-                    ) e ON m.id = e.rowid
+                    ) e ON m.rowid = e.rowid
                     ORDER BY e.distance, m.created_at DESC
                     LIMIT ? OFFSET ?
                 ''', (serialize_float32(query_embedding), k_value, actual_limit, actual_offset))
@@ -1065,14 +1072,14 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 # Update embedding if content changed
                 if content is not None:
                     try:
-                        embedding = self.model.encode(new_content).tolist()
+                        embedding = self._generate_embedding(new_content)
                         cursor = self.conn.execute('SELECT rowid FROM memories WHERE id = ?', (id,))
                         row = cursor.fetchone()
                         if row:
                             rowid = row[0]
                             self.conn.execute(
-                                'UPDATE vec_memories SET embedding = ? WHERE rowid = ?',
-                                (serialize_f32(embedding), rowid)
+                                'UPDATE memory_embeddings SET content_embedding = ? WHERE rowid = ?',
+                                (serialize_float32(embedding), rowid)
                             )
                             self.conn.commit()
                     except Exception as e:
