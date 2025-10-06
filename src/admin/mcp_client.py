@@ -33,22 +33,24 @@ class MCPHttpClient:
 
     async def _ensure_session(self):
         """Ensure aiohttp session is created"""
-        if self._session is None or self._session.closed:
-            headers = {
-                'Content-Type': 'application/json',
-                # MCP over HTTP requires accepting both JSON and SSE
-                'Accept': 'application/json, text/event-stream'
-            }
+        # Always close existing session to avoid event loop conflicts
+        if self._session and not self._session.closed:
+            await self._session.close()
 
-            # Add Authorization header if token provided
-            if self.auth_token:
-                headers['Authorization'] = f'Bearer {self.auth_token}'
+        headers = {
+            'Content-Type': 'application/json',
+            # MCP over HTTP requires accepting both JSON and SSE
+            'Accept': 'application/json, text/event-stream'
+        }
 
-            # Don't use timeout in Streamlit context to avoid event loop issues
-            # Streamlit's sync-to-async wrapper conflicts with aiohttp timeout
-            self._session = aiohttp.ClientSession(
-                headers=headers
-            )
+        # Add Authorization header if token provided
+        if self.auth_token:
+            headers['Authorization'] = f'Bearer {self.auth_token}'
+
+        # Create fresh session for each operation to avoid event loop issues
+        self._session = aiohttp.ClientSession(
+            headers=headers
+        )
 
     async def close(self):
         """Close the HTTP session"""
@@ -102,6 +104,10 @@ class MCPHttpClient:
         except Exception as e:
             logger.error(f"Failed to list tools: {e}")
             raise
+        finally:
+            # Close session after each operation
+            if self._session and not self._session.closed:
+                await self._session.close()
 
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -169,6 +175,10 @@ class MCPHttpClient:
         except Exception as e:
             logger.error(f"Failed to call tool {name}: {e}")
             raise
+        finally:
+            # Close session after each operation
+            if self._session and not self._session.closed:
+                await self._session.close()
 
     # High-level tool wrappers for admin UI
 
