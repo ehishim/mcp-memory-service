@@ -123,10 +123,68 @@ if not hash_val:
 - `c34b367` - Fix recall_memory JOIN using UUID instead of rowid
 - `03a13e2` - Make hash optional in Memory.from_dict() for API compatibility
 
+---
+
+## 🔧 Database Migration (2025-10-06)
+
+### Bug #9: Wrong Embedding Table Name
+- **Problem:** Previous migration created `vec_memories` table, but code expects `memory_embeddings`
+- **Root Cause:** Migration script used wrong table name, causing semantic search to fail
+- **Impact:** recall_memory fell back to returning all 479 memories
+
+### Migration Solution
+Created `migrate_db_fix.py` to rebuild database with correct format:
+
+**Migration Process:**
+1. Read old backup (`sqlite_vec.db.backup`) - old format with `content_hash`, `memory_type`
+2. Clean metadata - remove `tags` and `type` properties (now stored separately or deprecated)
+3. Create fresh schema with correct table names
+4. Generate new UUIDs for all memories
+5. Recalculate hashes using cleaned metadata
+6. Regenerate all embeddings using `all-MiniLM-L6-v2` model
+7. Deduplicate by hash (2 duplicates found and removed)
+
+**Migration Results:**
+```
+✅ 477 memories migrated (from 479, 2 duplicates removed)
+✅ 477 embeddings regenerated
+✅ 477 rowids aligned (memories.rowid = memory_embeddings.rowid)
+✅ Table: memory_embeddings (matches code)
+✅ Metadata: cleaned (no 'tags' or 'type' properties)
+✅ Empty metadata saved as '{}' (matches store() behavior)
+```
+
+**Key Migration Features:**
+- Uses actual `generate_content_hash()` from `src/mcp_memory_service/utils/hashing.py`
+- Rebuilds database exactly as current `store()` method would
+- Deduplication by hash prevents duplicates
+- Preserves timestamps from old database
+
+### Commits (Third Round)
+- `b940241` - Add migration script and update SESSION_NOTES
+
+---
+
+## ✅ Current Status (2025-10-06 End of Session)
+
+### Working Features
+✅ **search_by_content** - Works correctly, returns proper results with pagination
+✅ **Admin UI** - Displays memories correctly (Memory.from_dict auto-generates hash)
+✅ **recall_memory** - Semantic search works, returns relevant results
+✅ **Database** - Properly migrated with correct schema and table names
+
+### Known Issues
+⚠️ **recall_memory pagination** - Returns all results (total: 477) instead of limiting by relevance
+- **Problem:** `server.py:1082` uses `n_results=10000` which fetches all memories
+- **Impact:** Total count shows 477 instead of actual number of relevant results
+- **Status:** NOT FIXED - needs adjustment to use actual limit parameter
+- **Fix needed:** Change `n_results=10000` to `n_results=limit + offset`
+
 ### Root Cause Analysis
-Both bugs stemmed from the UUID + hash hybrid model migration:
+All bugs stemmed from the UUID + hash hybrid model migration:
 1. **Vector search JOIN** - Used new UUID `id` field where rowid (integer) was needed
 2. **API serialization** - Removed `hash` from responses but didn't make it optional in deserialization
+3. **Database migration** - Wrong table name (`vec_memories` vs `memory_embeddings`)
 
 ### Key Learnings
 1. **Systematic migration required** - Field renames need comprehensive search across all files
@@ -136,6 +194,8 @@ Both bugs stemmed from the UUID + hash hybrid model migration:
 5. **Public vs internal fields** - UUID (`id`) is public, hash is internal for deduplication
 6. **JOIN field types matter** - UUID strings vs integer rowids require different JOIN columns
 7. **Backward compatibility** - API field removal requires defensive deserialization logic
+8. **Table naming consistency** - Migration must use exact table names expected by code
+9. **Deduplication necessary** - Metadata changes can create hash duplicates
 
 ## ✅ What We Completed This Session
 
