@@ -27,7 +27,7 @@ class MCPHttpClient:
         """
         self.base_url = base_url.rstrip('/')
         self.auth_token = auth_token
-        self.timeout = aiohttp.ClientTimeout(total=timeout)
+        self.timeout_seconds = timeout
         self._session: Optional[aiohttp.ClientSession] = None
         self._message_id = 0
 
@@ -44,8 +44,10 @@ class MCPHttpClient:
             if self.auth_token:
                 headers['Authorization'] = f'Bearer {self.auth_token}'
 
+            # Create timeout inside async context
+            timeout = aiohttp.ClientTimeout(total=self.timeout_seconds)
             self._session = aiohttp.ClientSession(
-                timeout=self.timeout,
+                timeout=timeout,
                 headers=headers
             )
 
