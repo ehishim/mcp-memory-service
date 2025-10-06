@@ -565,51 +565,48 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="delete_memory",
-                        description="""Delete a specific memory by its hash.
+                        description="""Delete one or more memories by their hash.
 
-                        Example:
+                        Supports both single and bulk deletion.
+
+                        Examples:
                         {
-                            "content_hash": "a1b2c3d4..."
+                            "hash": "a1b2c3d4..."
+                        }
+
+                        {
+                            "hash": ["hash1", "hash2", "hash3"]
                         }""",
                         inputSchema={
                             "type": "object",
                             "properties": {
-                                "content_hash": {
-                                    "type": "string",
-                                    "description": "Hash of the memory content to delete. Obtainable from memory metadata."
+                                "hash": {
+                                    "oneOf": [
+                                        {"type": "string"},
+                                        {"type": "array", "items": {"type": "string"}}
+                                    ],
+                                    "description": "Single hash or array of hashes to delete"
                                 }
                             },
-                            "required": ["content_hash"]
+                            "required": ["hash"]
                         }
                     ),
                     types.Tool(
                         name="delete_by_tag",
-                        description="""Delete all memories with specific tags.
-                        WARNING: Deletes ALL memories containing any of the specified tags.
+                        description="""Delete memories by tags with precise AND/OR logic filtering.
 
-                        Example:
-                        {"tags": ["temporary", "outdated"]}""",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "tags": {
-                                    "type": "array", 
-                                    "items": {"type": "string"},
-                                    "description": "Array of tag labels. Memories containing any of these tags will be deleted."
-                                }
-                            },
-                            "required": ["tags"]
-                        }
-                    ),
-                    types.Tool(
-                        name="delete_by_tags",
-                        description="""Delete all memories containing any of the specified tags.
-                        This is the explicit multi-tag version for API clarity.
-                        WARNING: Deletes ALL memories containing any of the specified tags.
+                        Mirrors search_by_tag functionality for consistent API design.
+                        WARNING: This permanently deletes memories - use with caution.
 
-                        Example:
+                        Examples:
                         {
-                            "tags": ["temporary", "outdated", "test"]
+                            "tags": ["temporary", "outdated"],
+                            "match_all": false
+                        }
+
+                        {
+                            "tags": ["important", "urgent"],
+                            "match_all": true
                         }""",
                         inputSchema={
                             "type": "object",
@@ -617,28 +614,12 @@ class MemoryServer:
                                 "tags": {
                                     "type": "array",
                                     "items": {"type": "string"},
-                                    "description": "List of tag labels. Memories containing any of these tags will be deleted."
-                                }
-                            },
-                            "required": ["tags"]
-                        }
-                    ),
-                    types.Tool(
-                        name="delete_by_all_tags",
-                        description="""Delete memories that contain ALL of the specified tags.
-                        WARNING: Only deletes memories that have every one of the specified tags.
-
-                        Example:
-                        {
-                            "tags": ["important", "urgent"]
-                        }""",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "tags": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "List of tag labels. Only memories containing ALL of these tags will be deleted."
+                                    "description": "List of tags to match for deletion"
+                                },
+                                "match_all": {
+                                    "type": "boolean",
+                                    "description": "If true, memory must have ALL tags (AND logic); If false, memory needs ANY tag (OR logic)",
+                                    "default": False
                                 }
                             },
                             "required": ["tags"]
@@ -835,57 +816,6 @@ class MemoryServer:
                                 }
                             },
                             "required": ["start_date"]
-                        }
-                    ),
-                    types.Tool(
-                        name="delete_by_timeframe",
-                        description="""Delete memories within a specific timeframe.
-                        Optional tag parameter to filter deletions.
-
-                        Example:
-                        {
-                            "start_date": "2024-01-01",
-                            "end_date": "2024-01-31",
-                            "tag": "temporary"
-                        }""",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "start_date": {
-                                    "type": "string",
-                                    "format": "date",
-                                    "description": "Start date (inclusive) in YYYY-MM-DD format."
-                                },
-                                "end_date": {
-                                    "type": "string",
-                                    "format": "date",
-                                    "description": "End date (inclusive) in YYYY-MM-DD format."
-                                },
-                                "tag": {
-                                    "type": "string",
-                                    "description": "Optional tag to filter deletions. Only memories with this tag will be deleted."
-                                }
-                            },
-                            "required": ["start_date"]
-                        }
-                    ),
-                    types.Tool(
-                        name="delete_before_date",
-                        description="""Delete memories before a specific date.
-                        Optional tag parameter to filter deletions.
-
-                        Example:
-                        {
-                            "before_date": "2024-01-01",
-                            "tag": "temporary"
-                        }""",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "before_date": {"type": "string", "format": "date"},
-                                "tag": {"type": "string"}
-                            },
-                            "required": ["before_date"]
                         }
                     ),
                     types.Tool(
@@ -1091,10 +1021,6 @@ class MemoryServer:
                     return await self.handle_delete_memory(arguments)
                 elif name == "delete_by_tag":
                     return await self.handle_delete_by_tag(arguments)
-                elif name == "delete_by_tags":
-                    return await self.handle_delete_by_tags(arguments)
-                elif name == "delete_by_all_tags":
-                    return await self.handle_delete_by_all_tags(arguments)
                 elif name == "cleanup_duplicates":
                     return await self.handle_cleanup_duplicates(arguments)
                 elif name == "get_embedding":
@@ -1116,10 +1042,6 @@ class MemoryServer:
                     return await self.handle_check_database_health(arguments)
                 elif name == "recall_by_timeframe":
                     return await self.handle_recall_by_timeframe(arguments)
-                elif name == "delete_by_timeframe":
-                    return await self.handle_delete_by_timeframe(arguments)
-                elif name == "delete_before_date":
-                    return await self.handle_delete_before_date(arguments)
                 elif name == "dashboard_create_backup":
                     logger.info("Calling handle_dashboard_create_backup")
                     return await self.handle_dashboard_create_backup(arguments)
@@ -1299,94 +1221,68 @@ class MemoryServer:
             return [types.TextContent(type="text", text=f"Error searching by tags: {str(e)}")]
 
     async def handle_delete_memory(self, arguments: dict) -> List[types.TextContent]:
-        content_hash = arguments.get("content_hash")
-        
+        """Handler for deleting one or more memories by hash."""
+        hash_param = arguments.get("hash")
+
+        if not hash_param:
+            return [types.TextContent(type="text", text="Error: hash parameter is required")]
+
+        # Convert single hash to array for uniform processing
+        hashes = [hash_param] if isinstance(hash_param, str) else hash_param
+
         try:
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
-            success, message = await storage.delete(content_hash)
-            return [types.TextContent(type="text", text=message)]
+
+            if len(hashes) == 1:
+                # Single deletion
+                success, message = await storage.delete(hashes[0])
+                return [types.TextContent(type="text", text=message)]
+            else:
+                # Bulk deletion
+                deleted_count = 0
+                failed_count = 0
+                failed_hashes = []
+
+                for hash_val in hashes:
+                    success, message = await storage.delete(hash_val)
+                    if success:
+                        deleted_count += 1
+                    else:
+                        failed_count += 1
+                        failed_hashes.append(hash_val[:12] + "...")  # Truncate for readability
+
+                result_message = f"Deleted {deleted_count} of {len(hashes)} memories"
+                if failed_count > 0:
+                    result_message += f"\nFailed to delete {failed_count}: {', '.join(failed_hashes)}"
+
+                return [types.TextContent(type="text", text=result_message)]
+
         except Exception as e:
             logger.error(f"Error deleting memory: {str(e)}\n{traceback.format_exc()}")
             return [types.TextContent(type="text", text=f"Error deleting memory: {str(e)}")]
 
     async def handle_delete_by_tag(self, arguments: dict) -> List[types.TextContent]:
-        """Handler for deleting memories by tags."""
+        """Handler for deleting memories by tags with AND/OR logic."""
         tags = arguments.get("tags", [])
-        
+        match_all = arguments.get("match_all", False)
+
         if not tags:
             return [types.TextContent(type="text", text="Error: Tags array is required")]
-        
+
         # Convert single string to array if needed for backward compatibility
         if isinstance(tags, str):
             tags = [tags]
-        
+
         try:
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
-            count, message = await storage.delete_by_tag(tags)
+            count, message = await storage.delete_by_tag(tags, match_all=match_all)
             return [types.TextContent(type="text", text=message)]
         except Exception as e:
             logger.error(f"Error deleting by tag: {str(e)}\n{traceback.format_exc()}")
             return [types.TextContent(type="text", text=f"Error deleting by tag: {str(e)}")]
 
-    async def handle_delete_by_tags(self, arguments: dict) -> List[types.TextContent]:
-        """Handler for explicit multiple tag deletion with progress tracking."""
-        tags = arguments.get("tags", [])
-        
-        if not tags:
-            return [types.TextContent(type="text", text="Error: Tags array is required")]
-        
-        try:
-            # Initialize storage lazily when needed
-            storage = await self._ensure_storage_initialized()
-            
-            # Generate operation ID for progress tracking
-            import uuid
-            operation_id = f"delete_by_tags_{uuid.uuid4().hex[:8]}"
-            
-            # Send initial progress notification
-            await self.send_progress_notification(operation_id, 0, f"Starting deletion of memories with tags: {', '.join(tags)}")
-            
-            # Execute deletion with progress updates
-            await self.send_progress_notification(operation_id, 25, "Searching for memories to delete...")
-            
-            # If storage supports progress callbacks, use them
-            if hasattr(storage, 'delete_by_tags_with_progress'):
-                count, message = await storage.delete_by_tags_with_progress(
-                    tags, 
-                    progress_callback=lambda p, msg: asyncio.create_task(
-                        self.send_progress_notification(operation_id, 25 + (p * 0.7), msg)
-                    )
-                )
-            else:
-                await self.send_progress_notification(operation_id, 50, "Deleting memories...")
-                count, message = await storage.delete_by_tags(tags)
-                await self.send_progress_notification(operation_id, 90, f"Deleted {count} memories")
-            
-            # Complete the operation
-            await self.send_progress_notification(operation_id, 100, f"Deletion completed: {message}")
-            
-            return [types.TextContent(type="text", text=f"{message} (Operation ID: {operation_id})")]
-        except Exception as e:
-            logger.error(f"Error deleting by tags: {str(e)}\n{traceback.format_exc()}")
-            return [types.TextContent(type="text", text=f"Error deleting by tags: {str(e)}")]
-
-    async def handle_delete_by_all_tags(self, arguments: dict) -> List[types.TextContent]:
-        """Handler for deleting memories that contain ALL specified tags."""
-        tags = arguments.get("tags", [])
-        
-        if not tags:
-            return [types.TextContent(type="text", text="Error: Tags array is required")]
-        
-        try:
-            # Initialize storage lazily when needed
-            storage = await self._ensure_storage_initialized()
-            count, message = await storage.delete_by_all_tags(tags)
-            return [types.TextContent(type="text", text=message)]
-        except Exception as e:
-            logger.error(f"Error deleting by all tags: {str(e)}\n{traceback.format_exc()}")
-            return [types.TextContent(type="text", text=f"Error deleting by all tags: {str(e)}")]
 
     async def handle_cleanup_duplicates(self, arguments: dict) -> List[types.TextContent]:
         try:
@@ -1917,53 +1813,6 @@ class MemoryServer:
             return [types.TextContent(
                 type="text",
                 text=f"Error recalling memories: {str(e)}"
-            )]
-
-    async def handle_delete_by_timeframe(self, arguments: dict) -> List[types.TextContent]:
-        """Handle delete by timeframe requests."""
-        from datetime import datetime
-        
-        try:
-            # Initialize storage lazily when needed
-            storage = await self._ensure_storage_initialized()
-            
-            start_date = datetime.fromisoformat(arguments["start_date"]).date()
-            end_date = datetime.fromisoformat(arguments.get("end_date", arguments["start_date"])).date()
-            tag = arguments.get("tag")
-            
-            count, message = await storage.delete_by_timeframe(start_date, end_date, tag)
-            return [types.TextContent(
-                type="text",
-                text=f"Deleted {count} memories: {message}"
-            )]
-            
-        except Exception as e:
-            return [types.TextContent(
-                type="text",
-                text=f"Error deleting memories: {str(e)}"
-            )]
-
-    async def handle_delete_before_date(self, arguments: dict) -> List[types.TextContent]:
-        """Handle delete before date requests."""
-        from datetime import datetime
-        
-        try:
-            # Initialize storage lazily when needed
-            storage = await self._ensure_storage_initialized()
-            
-            before_date = datetime.fromisoformat(arguments["before_date"]).date()
-            tag = arguments.get("tag")
-            
-            count, message = await storage.delete_before_date(before_date, tag)
-            return [types.TextContent(
-                type="text",
-                text=f"Deleted {count} memories: {message}"
-            )]
-            
-        except Exception as e:
-            return [types.TextContent(
-                type="text",
-                text=f"Error deleting memories: {str(e)}"
             )]
 
     async def handle_ingest_document(self, arguments: dict) -> List[types.TextContent]:

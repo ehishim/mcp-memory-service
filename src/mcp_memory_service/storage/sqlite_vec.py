@@ -732,31 +732,62 @@ class SqliteVecMemoryStorage(MemoryStorage):
             logger.error(f"Failed to get memory by hash {content_hash}: {str(e)}")
             return None
     
-    async def delete_by_tag(self, tag: str) -> Tuple[int, str]:
-        """Delete memories by tag."""
+    async def delete_by_tag(self, tags: List[str], match_all: bool = False) -> Tuple[int, str]:
+        """Delete memories by tags with AND/OR logic (mirrors search_by_tag).
+
+        Args:
+            tags: List of tags to match
+            match_all: If True, memory must have ALL tags (AND logic);
+                      If False, memory needs ANY tag (OR logic)
+
+        Returns:
+            Tuple of (count_deleted, message)
+        """
         try:
             if not self.conn:
                 return 0, "Database not initialized"
-            
+
+            if not tags:
+                return 0, "No tags provided"
+
+            # Build query based on match_all (mirrors search_by_tags logic)
+            if match_all:
+                # All tags must be present (AND logic)
+                tag_conditions = " AND ".join(["tags LIKE ?" for _ in tags])
+                operation_desc = "all tags"
+            else:
+                # Any tag present (OR logic)
+                tag_conditions = " OR ".join(["tags LIKE ?" for _ in tags])
+                operation_desc = "any tag"
+
+            tag_params = [f"%{tag}%" for tag in tags]
+
             # Get the ids first to delete corresponding embeddings
-            cursor = self.conn.execute('SELECT id FROM memories WHERE tags LIKE ?', (f"%{tag}%",))
+            cursor = self.conn.execute(
+                f'SELECT id FROM memories WHERE {tag_conditions}',
+                tag_params
+            )
             memory_ids = [row[0] for row in cursor.fetchall()]
-            
+
             # Delete from both tables
             for memory_id in memory_ids:
                 self.conn.execute('DELETE FROM memory_embeddings WHERE rowid = ?', (memory_id,))
-            
-            cursor = self.conn.execute('DELETE FROM memories WHERE tags LIKE ?', (f"%{tag}%",))
+
+            # Delete memories
+            cursor = self.conn.execute(
+                f'DELETE FROM memories WHERE {tag_conditions}',
+                tag_params
+            )
             self.conn.commit()
-            
+
             count = cursor.rowcount
-            logger.info(f"Deleted {count} memories with tag: {tag}")
-            
+            logger.info(f"Deleted {count} memories with {operation_desc}: {tags}")
+
             if count > 0:
-                return count, f"Successfully deleted {count} memories with tag '{tag}'"
+                return count, f"Successfully deleted {count} memories with {operation_desc}: {', '.join(tags)}"
             else:
-                return 0, f"No memories found with tag '{tag}'"
-                
+                return 0, f"No memories found with {operation_desc}: {', '.join(tags)}"
+
         except Exception as e:
             error_msg = f"Failed to delete by tag: {str(e)}"
             logger.error(error_msg)
