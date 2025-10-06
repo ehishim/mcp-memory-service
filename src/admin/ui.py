@@ -19,6 +19,24 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from admin.mcp_client import MCPHttpClient
 from mcp_memory_service.models.memory import Memory
 
+
+def run_async(coro):
+    """
+    Run async coroutine in Streamlit-compatible way.
+    Handles event loop management to avoid 'Event loop is closed' errors.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    return loop.run_until_complete(coro)
+
+
 # Page config
 st.set_page_config(
     page_title="MCP Memory Admin",
@@ -187,7 +205,7 @@ def display_memory_card(memory: Memory, idx: int):
 
             if st.button("🗑️ Delete", key=f"del_{idx}"):
                 if st.session_state.client:
-                    result = asyncio.run(st.session_state.client.delete_memory(memory.content_hash))
+                    result = run_async(st.session_state.client.delete_memory(memory.content_hash))
                     if result.get("success"):
                         st.success(f"✅ Deleted memory")
                         st.rerun()
@@ -307,7 +325,7 @@ def edit_memory_form():
 
             # Only update if there are changes
             if update_params:
-                result = asyncio.run(
+                result = run_async(
                     st.session_state.client.update_memory(
                         st.session_state.editing_hash,
                         **update_params
@@ -362,7 +380,7 @@ def main():
             try:
                 # Only pass non-empty auth token
                 token = auth_token.strip() if auth_token else None
-                success, message = asyncio.run(init_client(mcp_url, auth_token=token))
+                success, message = run_async(init_client(mcp_url, auth_token=token))
                 if success:
                     st.success(f"✅ {message}")
                 else:
@@ -378,7 +396,7 @@ def main():
         if st.button("💚 Check Health", use_container_width=True):
             if 'client' in st.session_state:
                 try:
-                    result = asyncio.run(st.session_state.client.check_memory_health())
+                    result = run_async(st.session_state.client.check_memory_health())
                     if result.get("success"):
                         st.success("✅ System Healthy")
                         if "health" in result:
@@ -393,7 +411,7 @@ def main():
         if st.button("💾 Create Backup", use_container_width=True):
             if 'client' in st.session_state:
                 try:
-                    result = asyncio.run(st.session_state.client.backup_memory())
+                    result = run_async(st.session_state.client.backup_memory())
                     if result.get("success"):
                         st.success("✅ Backup created successfully")
                         if "backup" in result:
@@ -454,7 +472,7 @@ def main():
 
         if search_mode == "List All":
             # Use recall_memory with wildcard and server-side pagination
-            memories, pagination = asyncio.run(
+            memories, pagination = run_async(
                 st.session_state.client.recall_memory(
                     "*",
                     n_results=100,  # Keep high for backward compat
@@ -466,7 +484,7 @@ def main():
 
         elif search_mode == "Semantic Search":
             if query_input:
-                memories, pagination = asyncio.run(
+                memories, pagination = run_async(
                     st.session_state.client.recall_memory(
                         query_input,
                         n_results=n_results,
@@ -481,7 +499,7 @@ def main():
         elif search_mode == "Search by Tags":
             if tags_input:
                 tags = [t.strip() for t in tags_input.split(",") if t.strip()]
-                memories, pagination = asyncio.run(
+                memories, pagination = run_async(
                     st.session_state.client.search_by_tag(
                         tags,
                         match_all,
@@ -495,7 +513,7 @@ def main():
 
         elif search_mode == "Search by Content":
             if content_input:
-                memories, pagination = asyncio.run(
+                memories, pagination = run_async(
                     st.session_state.client.search_by_content(
                         content_input,
                         limit=page_size,
@@ -508,7 +526,7 @@ def main():
 
         elif search_mode == "Get by Hash":
             if hash_input:
-                memory = asyncio.run(st.session_state.client.get_by_hash(hash_input))
+                memory = run_async(st.session_state.client.get_by_hash(hash_input))
                 if memory:
                     memories = [memory]
                     total_count = 1
