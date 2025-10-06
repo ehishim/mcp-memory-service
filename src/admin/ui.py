@@ -234,15 +234,15 @@ def edit_memory_form():
 
     # Metadata editor (JSON) with validation
     st.markdown("**Metadata (JSON):**")
-    st.caption("Leave empty {} for no metadata, or add custom fields")
+    st.caption("Leave empty for no metadata, or add custom fields as JSON")
 
     metadata_str = st.text_area(
         "metadata_json",
-        value=json.dumps(st.session_state.get('edit_metadata', {}), indent=2),
+        value=json.dumps(st.session_state.get('edit_metadata', {}), indent=2) if st.session_state.get('edit_metadata') else "",
         height=150,
         key="edit_metadata_input",
         label_visibility="collapsed",
-        help="Custom metadata fields only. Tags are managed separately above. Empty {} is valid.",
+        help="Custom metadata fields only. Tags are managed separately above. Leave empty or use {} for no metadata.",
         on_change=None  # Triggers re-render on every keystroke
     )
 
@@ -253,11 +253,14 @@ def edit_memory_form():
     # Trim whitespace for validation
     metadata_str_trimmed = metadata_str.strip()
 
-    # Empty or whitespace-only is valid (treated as empty object)
+    # Empty string, whitespace-only, or {} is valid (no metadata)
     if not metadata_str_trimmed or metadata_str_trimmed == "{}":
         is_valid_json = True
         parsed_metadata = {}
-        st.success("✅ Valid (empty metadata)")
+        if not metadata_str_trimmed:
+            st.success("✅ Valid (no metadata)")
+        else:
+            st.success("✅ Valid (empty metadata)")
     else:
         try:
             parsed_metadata = json.loads(metadata_str_trimmed)
