@@ -1120,7 +1120,7 @@ def install_sqlite_vec_python313(system_info):
     print_info("  1. Install Python 3.12: brew install python@3.12")
     print_info("  2. Create venv: python3.12 -m venv .venv")
     print_info("  3. Activate: source .venv/bin/activate")
-    print_info("  4. Re-run: python install.py")
+    print_info("  4. Re-run: python install_mcp.py")
     print_info("")
     print_info("Option 2: Install pysqlite3-binary (alternative)")
     print_info("  pip install pysqlite3-binary")
@@ -1129,7 +1129,7 @@ def install_sqlite_vec_python313(system_info):
     print_info("  Check: https://github.com/asg017/sqlite-vec/issues")
     print_info("")
     print_info("Option 4: Use ChromaDB backend instead")
-    print_info("  python install.py --storage-backend chromadb")
+    print_info("  python install_mcp.py --storage-backend chromadb")
     print_info("")
     
     # Ask user if they want to try ChromaDB instead
@@ -1410,7 +1410,7 @@ def install_package(args):
             
             if system_info.get("has_homebrew_pytorch"):
                 print_info("Homebrew PyTorch was detected but installation still failed.")
-                print_info("Try running: python install.py --storage-backend sqlite_vec --skip-pytorch")
+                print_info("Try running: python install_mcp.py --storage-backend sqlite_vec --skip-pytorch")
             
         return False
 
@@ -1853,7 +1853,7 @@ def show_detailed_help():
     
     if is_legacy_hardware(system_info):
         print_success("Legacy Hardware Path (2013-2017 Intel Mac)")
-        print_info("  Recommended: python install.py --legacy-hardware")
+        print_info("  Recommended: python install_mcp.py --legacy-hardware")
         print_info("  This will:")
         print_info("    • Use SQLite-vec backend (avoids ChromaDB compatibility issues)")
         print_info("    • Configure ONNX runtime for CPU-only inference")
@@ -1861,43 +1861,43 @@ def show_detailed_help():
         print_info("    • Optimize resource usage for older hardware")
     elif system_info["is_macos"] and system_info["is_arm"]:
         print_success("Apple Silicon Mac - Modern Hardware Path")
-        print_info("  Recommended: python install.py")
+        print_info("  Recommended: python install_mcp.py")
         print_info("  This will:")
         print_info("    • Use SQLite-vec backend (fast and efficient)")
         print_info("    • Enable MPS acceleration")
         print_info("    • Zero network dependencies")
     elif system_info["is_windows"] and gpu_info.get("has_cuda"):
         print_success("Windows with CUDA GPU - High Performance Path")
-        print_info("  Recommended: python install.py")
+        print_info("  Recommended: python install_mcp.py")
         print_info("  This will:")
         print_info("    • Use SQLite-vec backend (fast and efficient)")
         print_info("    • Enable CUDA acceleration")
         print_info("    • Zero network dependencies")
     elif memory_gb > 0 and memory_gb < 4:
         print_success("Low-Memory System")
-        print_info("  Recommended: python install.py --storage-backend sqlite_vec")
+        print_info("  Recommended: python install_mcp.py --storage-backend sqlite_vec")
         print_info("  This will:")
         print_info("    • Use lightweight SQLite-vec backend")
         print_info("    • Minimize memory usage")
         print_info("    • Enable ONNX runtime for efficiency")
     elif memory_gb >= 16 and not (gpu_info.get("has_cuda") or gpu_info.get("has_mps") or gpu_info.get("has_directml")):
         print_success("High-Memory System (No GPU) - Choose Your Path")
-        print_info("  Option 1 (Recommended): python install.py")
+        print_info("  Option 1 (Recommended): python install_mcp.py")
         print_info("    • SQLite-vec: Fast startup, simple setup, same features")
-        print_info("  Option 2: python install.py --storage-backend chromadb")
+        print_info("  Option 2: python install_mcp.py --storage-backend chromadb")
         print_info("    • ChromaDB: Better for 10K+ memories, production deployments")
         print_info("  Most users benefit from SQLite-vec's simplicity")
     elif gpu_info.get("has_cuda") or gpu_info.get("has_mps") or gpu_info.get("has_directml"):
         gpu_type = "CUDA" if gpu_info.get("has_cuda") else "MPS" if gpu_info.get("has_mps") else "DirectML"
         print_success(f"GPU-Accelerated System ({gpu_type}) - High Performance Path")
-        print_info("  Recommended: python install.py")
+        print_info("  Recommended: python install_mcp.py")
         print_info("  This will:")
         print_info(f"    • Use SQLite-vec backend (fast and efficient)")
         print_info(f"    • Enable {gpu_type} hardware acceleration")
         print_info("    • Zero network dependencies")
     else:
         print_success("Standard Installation")
-        print_info("  Recommended: python install.py")
+        print_info("  Recommended: python install_mcp.py")
         print_info("  This will:")
         print_info("    • Use SQLite-vec backend (optimal for most users)")
         print_info("    • Fast startup and simple setup")
@@ -1952,11 +1952,11 @@ Generated on: {platform.node()} at {__import__('datetime').datetime.now().strfti
     recommended_backend = recommend_backend_intelligent(system_info, gpu_info, memory_gb, args)
     
     if is_legacy_hardware(system_info):
-        guide_content += "python install.py --legacy-hardware\n"
+        guide_content += "python install_mcp.py --legacy-hardware\n"
     elif memory_gb < 4:
-        guide_content += "python install.py --storage-backend sqlite_vec\n"
+        guide_content += "python install_mcp.py --storage-backend sqlite_vec\n"
     else:
-        guide_content += "python install.py\n"
+        guide_content += "python install_mcp.py\n"
     
     guide_content += f"""```
 
@@ -2883,7 +2883,7 @@ def main():
         if system_info["is_macos"] and system_info["is_x86"]:
             print_warning("Installation failed on macOS Intel.")
             print_info("Try running the script with '--force-compatible-deps' to force compatible versions:")
-            print_info("python install.py --force-compatible-deps")
+            print_info("python install_mcp.py --force-compatible-deps")
         sys.exit(1)
     
     # Step 4: Configure paths
@@ -2898,7 +2898,7 @@ def main():
             python_version = sys.version_info
             print_info("For macOS Intel compatibility issues, try these steps:")
             print_info("1. First uninstall current packages: pip uninstall -y torch torchvision torchaudio sentence-transformers")
-            print_info("2. Then reinstall with compatible versions: python install.py --force-compatible-deps")
+            print_info("2. Then reinstall with compatible versions: python install_mcp.py --force-compatible-deps")
             
             if python_version >= (3, 13):
                 print_info("For Python 3.13+, you may need to manually install the following:")

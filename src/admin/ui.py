@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-MCP Memory Service - Admin UI
-Directly accesses SQLite database for memory management.
+MCP Memory Service - Admin UI (Refactored)
+Connects to MCP server via HTTP/JSON-RPC instead of direct SQLite access.
 """
 
 import streamlit as st
@@ -11,18 +11,13 @@ from pathlib import Path
 from typing import List, Dict, Any
 import json
 from datetime import datetime
+import asyncio
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from mcp_memory_service.storage.sqlite_vec import SqliteVecMemoryStorage
+from admin.mcp_client import MCPHttpClient
 from mcp_memory_service.models.memory import Memory
-from mcp_memory_service.config import (
-    SQLITE_VEC_PATH,
-    BACKUPS_PATH,
-    STORAGE_BACKEND
-)
-
 
 # Page config
 st.set_page_config(
@@ -61,11 +56,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-def init_storage(db_path: str):
-    """Initialize storage backend."""
-    if 'storage' not in st.session_state or st.session_state.get('db_path') != db_path:
-        st.session_state.storage = SqliteVecMemoryStorage(db_path=db_path)
-        st.session_state.db_path = db_path
+async def init_client(mcp_url: str):
+    """Initialize MCP HTTP client."""
+    client = MCPHttpClient(mcp_url)
+    success, message = await client.test_connection()
+    if success:
+        st.session_state.client = client
+        st.session_state.mcp_url = mcp_url
+        return True, message
+    else:
+        return False, message
 
 
 def format_timestamp(timestamp: float) -> str:
@@ -185,14 +185,13 @@ def display_memory_card(memory: Memory, idx: int):
                 st.rerun()
 
             if st.button("🗑️ Delete", key=f"del_{idx}"):
-                if st.session_state.storage:
-                    import asyncio
-                    success, msg = asyncio.run(st.session_state.storage.delete(memory.content_hash))
-                    if success:
-                        st.success(f"✅ Deleted: {msg}")
+                if st.session_state.client:
+                    result = asyncio.run(st.session_state.client.delete_memory(memory.content_hash))
+                    if result.get("success"):
+                        st.success(f"✅ Deleted memory")
                         st.rerun()
                     else:
-                        st.error(f"❌ Error: {msg}")
+                        st.error(f"❌ Error: {result.get('message', 'Unknown error')}")
 
         # Display content
         st.text_area("Content", memory.content, height=100, disabled=True, key=f"content_display_{idx}")
@@ -284,8 +283,6 @@ def edit_memory_form():
 
     with col1:
         if st.button("💾 Save Changes", type="primary", disabled=not is_valid_json):
-            import asyncio
-
             # Validate JSON before saving
             if not is_valid_json:
                 st.error("❌ Cannot save: Invalid JSON in metadata")
@@ -309,17 +306,16 @@ def edit_memory_form():
 
             # Only update if there are changes
             if update_params:
-                # Use unified update_memory method
-                success, msg = asyncio.run(
-                    st.session_state.storage.update_memory(
+                result = asyncio.run(
+                    st.session_state.client.update_memory(
                         st.session_state.editing_hash,
                         **update_params
                     )
                 )
-                if success:
-                    st.success(f"✅ {msg}")
+                if result.get("success"):
+                    st.success(f"✅ Memory updated")
                 else:
-                    st.error(f"❌ Update failed: {msg}")
+                    st.error(f"❌ Update failed: {result.get('message', 'Unknown error')}")
             else:
                 st.info("ℹ️ No changes detected")
 
@@ -340,21 +336,25 @@ def edit_memory_form():
 def main():
     st.title("🧠 MCP Memory Service - Admin UI")
 
-    # Sidebar - Database selection
+    # Sidebar - MCP Server Connection
     with st.sidebar:
         st.header("⚙️ Configuration")
 
-        # Use same config as MCP server
-        db_path = st.text_input(
-            "Database Path",
-            value=st.session_state.get('db_path', SQLITE_VEC_PATH),
-            help="Path to SQLite database file (from MCP_MEMORY_SQLITE_PATH)"
+        # MCP server URL from env var or user input
+        default_url = os.environ.get('MCP_SERVER_URL', 'http://localhost:8030/mcp')
+        mcp_url = st.text_input(
+            "MCP Server URL",
+            value=st.session_state.get('mcp_url', default_url),
+            help="URL of the running MCP server (e.g., http://mevault:8030/mcp)"
         )
 
         if st.button("🔌 Connect"):
             try:
-                init_storage(db_path)
-                st.success("✅ Connected to database")
+                success, message = asyncio.run(init_client(mcp_url))
+                if success:
+                    st.success(f"✅ {message}")
+                else:
+                    st.error(f"❌ {message}")
             except Exception as e:
                 st.error(f"❌ Connection failed: {e}")
 
@@ -364,52 +364,34 @@ def main():
         st.header("🛠️ System Operations")
 
         if st.button("💚 Check Health", use_container_width=True):
-            if 'storage' in st.session_state:
-                import asyncio
+            if 'client' in st.session_state:
                 try:
-                    stats = asyncio.run(st.session_state.storage.get_stats())
-                    st.success("✅ System Healthy")
-                    st.json(stats)
+                    result = asyncio.run(st.session_state.client.check_memory_health())
+                    if result.get("success"):
+                        st.success("✅ System Healthy")
+                        if "health" in result:
+                            st.json(result["health"])
+                    else:
+                        st.error(f"❌ Health check failed: {result.get('error', 'Unknown error')}")
                 except Exception as e:
                     st.error(f"❌ Health check failed: {e}")
             else:
-                st.warning("Connect to database first")
+                st.warning("Connect to MCP server first")
 
         if st.button("💾 Create Backup", use_container_width=True):
-            if 'storage' in st.session_state:
-                import asyncio
-                from datetime import datetime
+            if 'client' in st.session_state:
                 try:
-                    # Use same backup path as MCP server (from config)
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    backup_name = f"memory_backup_{timestamp}"
-                    backup_dir = os.path.join(BACKUPS_PATH, backup_name)
-
-                    # Use storage backend's backup method (includes WAL checkpoint)
-                    success, message, info = asyncio.run(
-                        st.session_state.storage.create_backup(backup_dir)
-                    )
-
-                    if success:
-                        st.success(f"✅ {message}")
-                        st.info(f"📊 {info['memory_count']} memories • {info['file_size_mb']} MB • WAL checkpointed")
+                    result = asyncio.run(st.session_state.client.backup_memory())
+                    if result.get("success"):
+                        st.success("✅ Backup created successfully")
+                        if "backup" in result:
+                            st.json(result["backup"])
                     else:
-                        st.error(f"❌ {message}")
+                        st.error(f"❌ Backup failed: {result.get('error', 'Unknown error')}")
                 except Exception as e:
                     st.error(f"❌ Backup failed: {e}")
             else:
-                st.warning("Connect to database first")
-
-        if st.button("🧹 Cleanup Duplicates", use_container_width=True):
-            if 'storage' in st.session_state:
-                import asyncio
-                try:
-                    count, msg = asyncio.run(st.session_state.storage.cleanup_duplicates())
-                    st.success(f"✅ {msg}")
-                except Exception as e:
-                    st.error(f"❌ Cleanup failed: {e}")
-            else:
-                st.warning("Connect to database first")
+                st.warning("Connect to MCP server first")
 
         st.divider()
 
@@ -418,145 +400,129 @@ def main():
 
         search_mode = st.radio(
             "Search Mode",
-            ["List All", "Semantic Search", "Search by Tags", "Get by Hash"]
+            ["List All", "Semantic Search", "Search by Tags", "Search by Content", "Get by Hash"]
         )
 
         if search_mode == "Semantic Search":
             query_input = st.text_input("Search Query", placeholder="e.g., 'docker configurations' or 'last week'")
-            n_results = st.slider("Max Results", min_value=1, max_value=50, value=10)
+            n_results = st.slider("Max Results", min_value=1, max_value=100, value=10)
         elif search_mode == "Search by Tags":
             tags_input = st.text_input("Tags (comma-separated)")
             match_all = st.checkbox("Match ALL tags (AND logic)", value=False)
+        elif search_mode == "Search by Content":
+            content_input = st.text_input("Search Text", placeholder="substring search")
+            limit = st.slider("Max Results", min_value=1, max_value=100, value=10)
         elif search_mode == "Get by Hash":
             hash_input = st.text_input("Content Hash")
 
-        # Pagination (only for List All)
-        if search_mode == "List All":
-            st.divider()
-            page_size = st.select_slider("Page Size", options=[10, 25, 50, 100], value=25)
-            page = st.number_input("Page", min_value=1, value=1)
-        else:
-            page_size = 25
-            page = 1
-
+        # Pagination controls
         st.divider()
+        st.markdown("**Pagination:**")
+        if 'page_size' not in st.session_state:
+            st.session_state.page_size = 25
+        if 'current_page' not in st.session_state:
+            st.session_state.current_page = 1
 
-        # Document Ingestion
-        st.header("📄 Document Ingestion")
-
-        with st.expander("Ingest Documents", expanded=False):
-            ingest_mode = st.radio("Ingestion Mode", ["Single File", "Directory"], horizontal=True)
-
-            if ingest_mode == "Single File":
-                file_path = st.text_input("File Path", placeholder="/path/to/document.pdf")
-                file_tags = st.text_input("Tags (comma-separated)", key="file_tags")
-                chunk_size = st.number_input("Chunk Size", min_value=100, max_value=5000, value=1000)
-                chunk_overlap = st.number_input("Chunk Overlap", min_value=0, max_value=500, value=100)
-
-                if st.button("📄 Ingest File", use_container_width=True):
-                    if 'storage' in st.session_state and file_path:
-                        import asyncio
-                        from mcp_memory_service.ingestion.document_processor import DocumentProcessor
-                        try:
-                            processor = DocumentProcessor(st.session_state.storage)
-                            tags = [t.strip() for t in file_tags.split(",")] if file_tags else []
-                            count, msg = asyncio.run(processor.ingest_document(
-                                file_path, tags, chunk_size, chunk_overlap
-                            ))
-                            st.success(f"✅ {msg}")
-                        except Exception as e:
-                            st.error(f"❌ Ingestion failed: {e}")
-                    else:
-                        st.warning("Connect to database and provide file path")
-
-            else:  # Directory
-                dir_path = st.text_input("Directory Path", placeholder="/path/to/documents/")
-                dir_tags = st.text_input("Tags (comma-separated)", key="dir_tags")
-                recursive = st.checkbox("Recursive", value=False)
-                file_extensions = st.text_input("File Extensions", value=".pdf,.txt,.md,.json")
-                max_files = st.number_input("Max Files", min_value=1, max_value=1000, value=100)
-
-                if st.button("📁 Ingest Directory", use_container_width=True):
-                    if 'storage' in st.session_state and dir_path:
-                        import asyncio
-                        from mcp_memory_service.ingestion.document_processor import DocumentProcessor
-                        try:
-                            processor = DocumentProcessor(st.session_state.storage)
-                            tags = [t.strip() for t in dir_tags.split(",")] if dir_tags else []
-                            exts = [e.strip() for e in file_extensions.split(",")]
-                            count, msg = asyncio.run(processor.ingest_directory(
-                                dir_path, tags, recursive, exts, max_files=max_files
-                            ))
-                            st.success(f"✅ {msg}")
-                        except Exception as e:
-                            st.error(f"❌ Ingestion failed: {e}")
-                    else:
-                        st.warning("Connect to database and provide directory path")
+        page_size = st.select_slider("Page Size", options=[10, 25, 50, 100], value=st.session_state.page_size)
+        st.session_state.page_size = page_size
 
     # Main content area
-    if 'storage' not in st.session_state:
-        st.info("👈 Connect to a database using the sidebar")
+    if 'client' not in st.session_state:
+        st.info("👈 Connect to MCP server using the sidebar")
         return
-
-    import asyncio
 
     # Fetch memories based on search mode
     memories = []
     total_count = 0
+    pagination = {}
 
     try:
+        # Calculate offset from current page
+        offset = (st.session_state.current_page - 1) * page_size
+
         if search_mode == "List All":
-            offset = (page - 1) * page_size
-            memories = asyncio.run(
-                st.session_state.storage.get_all_memories(limit=page_size, offset=offset)
+            # Use recall_memory with wildcard and server-side pagination
+            memories, pagination = asyncio.run(
+                st.session_state.client.recall_memory(
+                    "*",
+                    n_results=100,  # Keep high for backward compat
+                    limit=page_size,
+                    offset=offset
+                )
             )
-            # Get total count for pagination
-            all_memories = asyncio.run(st.session_state.storage.get_all_memories())
-            total_count = len(all_memories)
+            total_count = pagination.get('total', 0)
 
         elif search_mode == "Semantic Search":
             if query_input:
-                results = asyncio.run(
-                    st.session_state.storage.recall_memory(query_input, n_results)
+                memories, pagination = asyncio.run(
+                    st.session_state.client.recall_memory(
+                        query_input,
+                        n_results=n_results,
+                        limit=page_size,
+                        offset=offset
+                    )
                 )
-                memories = results  # recall_memory returns List[Memory]
-                total_count = len(memories)
+                total_count = pagination.get('total', 0)
             else:
                 st.warning("Enter a search query")
 
         elif search_mode == "Search by Tags":
             if tags_input:
                 tags = [t.strip() for t in tags_input.split(",") if t.strip()]
-                operation = "AND" if match_all else "OR"
-                memories = asyncio.run(
-                    st.session_state.storage.search_by_tags(tags, operation=operation)
+                memories, pagination = asyncio.run(
+                    st.session_state.client.search_by_tag(
+                        tags,
+                        match_all,
+                        limit=page_size,
+                        offset=offset
+                    )
                 )
-                total_count = len(memories)
-                # Apply pagination to results
-                start_idx = (page - 1) * page_size
-                end_idx = start_idx + page_size
-                memories = memories[start_idx:end_idx]
+                total_count = pagination.get('total', 0)
+            else:
+                st.warning("Enter tags to search")
+
+        elif search_mode == "Search by Content":
+            if content_input:
+                memories, pagination = asyncio.run(
+                    st.session_state.client.search_by_content(
+                        content_input,
+                        limit=page_size,
+                        offset=offset
+                    )
+                )
+                total_count = pagination.get('total', 0)
+            else:
+                st.warning("Enter search text")
 
         elif search_mode == "Get by Hash":
             if hash_input:
-                memory = asyncio.run(st.session_state.storage.get_by_hash(hash_input))
+                memory = asyncio.run(st.session_state.client.get_by_hash(hash_input))
                 if memory:
                     memories = [memory]
                     total_count = 1
+            else:
+                st.warning("Enter content hash")
 
     except Exception as e:
         st.error(f"❌ Error fetching memories: {e}")
         return
 
-    # Display stats
-    col1, col2, col3 = st.columns(3)
+    # Display stats and pagination controls
+    total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 0
+
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
     with col1:
         st.metric("Total Results", total_count)
     with col2:
-        st.metric("Current Page", page)
+        if st.button("← Previous", disabled=st.session_state.current_page <= 1):
+            st.session_state.current_page -= 1
+            st.rerun()
     with col3:
-        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 0
-        st.metric("Total Pages", total_pages)
+        if st.button("Next →", disabled=st.session_state.current_page >= total_pages):
+            st.session_state.current_page += 1
+            st.rerun()
+    with col4:
+        st.metric("Page", f"{st.session_state.current_page} / {total_pages}")
 
     st.divider()
 

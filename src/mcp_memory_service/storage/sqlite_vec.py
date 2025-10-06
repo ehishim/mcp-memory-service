@@ -445,49 +445,78 @@ class SqliteVecMemoryStorage(MemoryStorage):
             logger.error(traceback.format_exc())
             return False, error_msg
     
-    async def retrieve(self, query: str, n_results: int = 5) -> List[MemoryQueryResult]:
-        """Retrieve memories using semantic search."""
+    async def retrieve(
+        self,
+        query: str,
+        n_results: int = 5,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None
+    ) -> Tuple[List[MemoryQueryResult], int]:
+        """
+        Retrieve memories using semantic search with pagination support.
+
+        Args:
+            query: Search query text
+            n_results: Number of results (used when limit not provided)
+            limit: Maximum results to return (overrides n_results for pagination)
+            offset: Number of results to skip (for pagination)
+
+        Returns:
+            Tuple of (results, total_count)
+        """
         try:
             if not self.conn:
                 logger.error("Database not initialized")
-                return []
-            
+                return [], 0
+
             if not self.embedding_model:
                 logger.warning("No embedding model available, cannot perform semantic search")
-                return []
-            
+                return [], 0
+
             # Generate query embedding
             try:
                 query_embedding = self._generate_embedding(query)
             except Exception as e:
                 logger.error(f"Failed to generate query embedding: {str(e)}")
-                return []
-            
+                return [], 0
+
             # First, check if embeddings table has data
             cursor = self.conn.execute('SELECT COUNT(*) FROM memory_embeddings')
             embedding_count = cursor.fetchone()[0]
-            
+
             if embedding_count == 0:
                 logger.warning("No embeddings found in database. Memories may have been stored without embeddings.")
-                return []
-            
+                return [], 0
+
+            # Get total count of memories for pagination
+            total_count = embedding_count
+
+            # Apply pagination - use limit if provided, otherwise use n_results
+            actual_limit = limit if limit is not None else n_results
+            actual_offset = offset if offset is not None else 0
+
             # Perform vector similarity search using JOIN with retry logic
             def search_memories():
-                # Try direct rowid join first
+                # Try direct rowid join first with pagination
+                # Note: sqlite-vec k parameter controls initial candidates, we filter afterward
+                # Use a larger k to ensure we have enough candidates after offset
+                k_value = actual_limit + actual_offset + 100
+
                 cursor = self.conn.execute('''
                     SELECT m.content_hash, m.content, m.tags, m.metadata,
                            m.created_at, m.updated_at, m.created_at_iso, m.updated_at_iso,
                            e.distance
                     FROM memories m
                     INNER JOIN (
-                        SELECT rowid, distance 
-                        FROM memory_embeddings 
+                        SELECT rowid, distance
+                        FROM memory_embeddings
                         WHERE content_embedding MATCH ? AND k = ?
                         ORDER BY distance
                     ) e ON m.id = e.rowid
                     ORDER BY e.distance, m.created_at DESC
-                ''', (serialize_float32(query_embedding), n_results))
-                
+                    LIMIT ? OFFSET ?
+                ''', (serialize_float32(query_embedding), k_value, actual_limit, actual_offset))
+
                 # Check if we got results
                 results = cursor.fetchall()
                 if not results:
@@ -495,22 +524,22 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     logger.debug("No results from vector search. Checking database state...")
                     mem_count = self.conn.execute('SELECT COUNT(*) FROM memories').fetchone()[0]
                     logger.debug(f"Memories table has {mem_count} rows, embeddings table has {embedding_count} rows")
-                
+
                 return results
-            
+
             search_results = await self._execute_with_retry(search_memories)
-            
+
             results = []
             for row in search_results:
                 try:
                     # Parse row data
                     content_hash, content, tags_str, metadata_str = row[:4]
                     created_at, updated_at, created_at_iso, updated_at_iso, distance = row[4:]
-                    
+
                     # Parse tags and metadata
                     tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
                     metadata = json.loads(metadata_str) if metadata_str else {}
-                    
+
                     # Create Memory object
                     memory = Memory(
                         content=content,
@@ -522,27 +551,27 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         created_at_iso=created_at_iso,
                         updated_at_iso=updated_at_iso
                     )
-                    
+
                     # Calculate relevance score (lower distance = higher relevance)
                     relevance_score = max(0.0, 1.0 - distance)
-                    
+
                     results.append(MemoryQueryResult(
                         memory=memory,
                         relevance_score=relevance_score,
                         debug_info={"distance": distance, "backend": "sqlite-vec"}
                     ))
-                    
+
                 except Exception as parse_error:
                     logger.warning(f"Failed to parse memory result: {parse_error}")
                     continue
-            
-            logger.info(f"Retrieved {len(results)} memories for query: {query}")
-            return results
-            
+
+            logger.info(f"Retrieved {len(results)} of {total_count} memories for query (limit={actual_limit}, offset={actual_offset}): {query}")
+            return results, total_count
+
         except Exception as e:
             logger.error(f"Failed to retrieve memories: {str(e)}")
             logger.error(traceback.format_exc())
-            return []
+            return [], 0
     
     async def search_by_tag(self, tags: List[str]) -> List[Memory]:
         """Search memories by tags."""
@@ -601,42 +630,75 @@ class SqliteVecMemoryStorage(MemoryStorage):
             logger.error(traceback.format_exc())
             return []
     
-    async def search_by_tags(self, tags: List[str], operation: str = "AND") -> List[Memory]:
-        """Search memories by tags with AND/OR operation support."""
+    async def search_by_tags(
+        self,
+        tags: List[str],
+        operation: str = "AND",
+        limit: Optional[int] = None,
+        offset: Optional[int] = None
+    ) -> Tuple[List[Memory], int]:
+        """
+        Search memories by tags with AND/OR operation support and pagination.
+
+        Args:
+            tags: List of tags to search for
+            operation: "AND" (all tags) or "OR" (any tag)
+            limit: Maximum results to return
+            offset: Number of results to skip
+
+        Returns:
+            Tuple of (memories, total_count)
+        """
         try:
             if not self.conn:
                 logger.error("Database not initialized")
-                return []
-            
+                return [], 0
+
             if not tags:
-                return []
-            
+                return [], 0
+
             # Build query based on operation
             if operation.upper() == "AND":
                 # All tags must be present (each tag must appear in the tags field)
                 tag_conditions = " AND ".join(["tags LIKE ?" for _ in tags])
             else:  # OR operation (default for backward compatibility)
                 tag_conditions = " OR ".join(["tags LIKE ?" for _ in tags])
-            
+
             tag_params = [f"%{tag}%" for tag in tags]
-            
-            cursor = self.conn.execute(f'''
+
+            # Get total count first
+            count_query = f'SELECT COUNT(*) FROM memories WHERE {tag_conditions}'
+            cursor = self.conn.execute(count_query, tag_params)
+            total_count = cursor.fetchone()[0]
+
+            # Build main query with pagination
+            query = f'''
                 SELECT content_hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
-                FROM memories 
+                FROM memories
                 WHERE {tag_conditions}
                 ORDER BY updated_at DESC
-            ''', tag_params)
-            
+            '''
+
+            # Add pagination if provided
+            if limit is not None:
+                query += ' LIMIT ?'
+                tag_params.append(limit)
+                if offset is not None:
+                    query += ' OFFSET ?'
+                    tag_params.append(offset)
+
+            cursor = self.conn.execute(query, tag_params)
+
             results = []
             for row in cursor.fetchall():
                 try:
                     content_hash, content, tags_str, metadata_str, created_at, updated_at, created_at_iso, updated_at_iso = row
-                    
+
                     # Parse tags and metadata
                     memory_tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
                     metadata = json.loads(metadata_str) if metadata_str else {}
-                    
+
                     memory = Memory(
                         content=content,
                         content_hash=content_hash,
@@ -647,20 +709,20 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         created_at_iso=created_at_iso,
                         updated_at_iso=updated_at_iso
                     )
-                    
+
                     results.append(memory)
-                    
+
                 except Exception as parse_error:
                     logger.warning(f"Failed to parse memory result: {parse_error}")
                     continue
-            
-            logger.info(f"Found {len(results)} memories with tags: {tags} (operation: {operation})")
-            return results
-            
+
+            logger.info(f"Found {len(results)} of {total_count} memories with tags: {tags} (operation: {operation}, limit={limit}, offset={offset})")
+            return results, total_count
+
         except Exception as e:
             logger.error(f"Failed to search by tags with operation {operation}: {str(e)}")
             logger.error(traceback.format_exc())
-            return []
+            return [], 0
     
     async def delete(self, content_hash: str) -> Tuple[bool, str]:
         """Delete a memory by its content hash."""
@@ -1290,35 +1352,59 @@ class SqliteVecMemoryStorage(MemoryStorage):
             logger.error(traceback.format_exc())
             return []
     
-    async def search_by_content(self, search_text: str, limit: int = 10) -> List[Memory]:
-        """Search memories containing specific text (substring search)."""
+    async def search_by_content(
+        self,
+        search_text: str,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None
+    ) -> Tuple[List[Memory], int]:
+        """
+        Search memories containing specific text (substring search) with pagination.
+
+        Args:
+            search_text: Text to search for in content
+            limit: Maximum results to return (default 10 if not specified)
+            offset: Number of results to skip (default 0)
+
+        Returns:
+            Tuple of (memories, total_count)
+        """
         try:
             if not self.conn:
                 logger.error("Database not initialized")
-                return []
-            
+                return [], 0
+
             if not search_text:
-                return []
-            
+                return [], 0
+
+            # Get total count first
+            count_query = 'SELECT COUNT(*) FROM memories WHERE content LIKE ?'
+            cursor = self.conn.execute(count_query, (f'%{search_text}%',))
+            total_count = cursor.fetchone()[0]
+
+            # Apply pagination - default limit is 10
+            actual_limit = limit if limit is not None else 10
+            actual_offset = offset if offset is not None else 0
+
             cursor = self.conn.execute('''
                 SELECT content_hash, content, tags, metadata,
                        created_at, updated_at, created_at_iso, updated_at_iso
-                FROM memories 
+                FROM memories
                 WHERE content LIKE ?
                 ORDER BY updated_at DESC
-                LIMIT ?
-            ''', (f'%{search_text}%', limit))
-            
+                LIMIT ? OFFSET ?
+            ''', (f'%{search_text}%', actual_limit, actual_offset))
+
             memories = []
             for row in cursor.fetchall():
                 try:
                     content_hash, content, tags_str, metadata_str = row[:4]
                     created_at, updated_at, created_at_iso, updated_at_iso = row[4:]
-                    
+
                     # Parse tags and metadata
                     tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()] if tags_str else []
                     metadata = json.loads(metadata_str) if metadata_str else {}
-                    
+
                     memory = Memory(
                         content=content,
                         content_hash=content_hash,
@@ -1333,13 +1419,14 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 except Exception as parse_error:
                     logger.warning(f"Failed to parse memory result: {parse_error}")
                     continue
-            
-            return memories
-            
+
+            logger.info(f"Found {len(memories)} of {total_count} memories containing '{search_text}' (limit={actual_limit}, offset={actual_offset})")
+            return memories, total_count
+
         except Exception as e:
             logger.error(f"Error in content search: {str(e)}")
             logger.error(traceback.format_exc())
-            return []
+            return [], 0
     
     async def update_content(self, content_hash: str, new_content: str) -> Tuple[bool, str]:
         """Update memory content while preserving metadata and regenerating embeddings."""

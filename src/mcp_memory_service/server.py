@@ -175,6 +175,18 @@ from .utils.system_detection import (
     AcceleratorType
 )
 from .utils.time_parser import extract_time_expression, parse_time_expression
+from .utils.json_response import (
+    create_json_response,
+    create_success_response,
+    create_error_response,
+    create_paginated_response,
+    create_single_memory_response,
+    create_operation_response,
+    create_health_response,
+    create_backup_response,
+    memory_to_dict,
+    query_result_to_dict
+)
 
 # Note: Logging is already configured at the top of the file with dual-stream handler
 
@@ -450,7 +462,7 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="recall_memory",
-                        description="Semantic search with natural language time filtering.",
+                        description="Semantic search with natural language time filtering and pagination support.",
                         inputSchema={
                             "type": "object",
                             "properties": {
@@ -458,9 +470,13 @@ class MemoryServer:
                                     "type": "string",
                                     "description": "Supports time expressions (yesterday, last week, Jan 2024)"
                                 },
-                                "n_results": {
-                                    "type": "number",
-                                    "default": 5
+                                "limit": {
+                                    "type": "integer",
+                                    "description": "Maximum results to return (optional - returns all if not specified)"
+                                },
+                                "offset": {
+                                    "type": "integer",
+                                    "description": "Number of results to skip (optional, default 0)"
                                 }
                             },
                             "required": ["query"]
@@ -468,18 +484,27 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="search_by_tag",
-                        description="Filter memories by tags with AND/OR logic.",
+                        description="Filter memories by tags with AND/OR logic and pagination support.",
                         inputSchema={
                             "type": "object",
                             "properties": {
                                 "tags": {
                                     "type": "array",
-                                    "items": {"type": "string"}
+                                    "items": {"type": "string"},
+                                    "description": "List of tags to search for"
                                 },
                                 "match_all": {
                                     "type": "boolean",
-                                    "description": "true=AND, false=OR",
+                                    "description": "If true, match all tags (AND). If false, match any tag (OR)",
                                     "default": False
+                                },
+                                "limit": {
+                                    "type": "integer",
+                                    "description": "Maximum results to return (optional - returns all if not specified)"
+                                },
+                                "offset": {
+                                    "type": "integer",
+                                    "description": "Number of results to skip (optional, default 0)"
                                 }
                             },
                             "required": ["tags"]
@@ -534,14 +559,21 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="search_by_content",
-                        description="Substring text search in memory content.",
+                        description="Substring text search in memory content with pagination support.",
                         inputSchema={
                             "type": "object",
                             "properties": {
-                                "search_text": {"type": "string"},
+                                "search_text": {
+                                    "type": "string",
+                                    "description": "Text to search for in content"
+                                },
                                 "limit": {
                                     "type": "integer",
-                                    "default": 10
+                                    "description": "Maximum results to return (optional - returns all if not specified)"
+                                },
+                                "offset": {
+                                    "type": "integer",
+                                    "description": "Number of results to skip (optional, default 0)"
                                 }
                             },
                             "required": ["search_text"]
@@ -716,111 +748,124 @@ class MemoryServer:
             return [types.TextContent(type="text", text=f"Error storing memory: {str(e)}")]
     
     async def handle_search_by_tag(self, arguments: dict) -> List[types.TextContent]:
-        tags = arguments.get("tags", [])
-        match_all = arguments.get("match_all", False)
-        
-        if not tags:
-            return [types.TextContent(type="text", text="Error: Tags are required")]
-        
+        """Tag filtering with pagination support."""
         try:
+            tags = arguments.get("tags", [])
+            match_all = arguments.get("match_all", False)
+            limit = arguments.get("limit")
+            offset = arguments.get("offset")
+
+            if not tags:
+                return create_error_response("Tags parameter is required")
+
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
-            
-            # Use search_by_tags with operation parameter for AND/OR logic
-            operation = "AND" if match_all else "OR"
-            memories = await storage.search_by_tags(tags, operation=operation)
-            
-            if not memories:
-                return [types.TextContent(
-                    type="text",
-                    text=f"No memories found with tags: {', '.join(tags)}"
-                )]
-            
-            formatted_results = []
-            for i, memory in enumerate(memories):
-                memory_info = [
-                    f"Memory {i+1}:",
-                    f"Content: {memory.content}",
-                    f"Hash: {memory.content_hash}",
-                    f"Tags: {', '.join(memory.tags)}"
-                ]
-                memory_info.append("---")
-                formatted_results.append("\n".join(memory_info))
-            
-            return [types.TextContent(
-                type="text",
-                text="Found the following memories:\n\n" + "\n".join(formatted_results)
-            )]
+
+            # Call storage with pagination
+            results, total_count = await storage.search_by_tags(
+                tags=tags,
+                match_all=match_all,
+                limit=limit,
+                offset=offset
+            )
+
+            # Build pagination metadata
+            actual_offset = offset if offset is not None else 0
+            has_more = limit and (actual_offset + len(results)) < total_count
+            next_offset = actual_offset + len(results) if has_more else None
+
+            # Convert to dicts
+            memories_data = [memory_to_dict(m) for m in results]
+
+            response = {
+                "success": True,
+                "memories": memories_data,
+                "pagination": {
+                    "total": total_count,
+                    "limit": limit,
+                    "offset": actual_offset,
+                    "has_more": has_more,
+                    "next_offset": next_offset
+                }
+            }
+
+            return create_json_response(response)
+
         except Exception as e:
-            logger.error(f"Error searching by tags: {str(e)}\n{traceback.format_exc()}")
-            return [types.TextContent(type="text", text=f"Error searching by tags: {str(e)}")]
+            logger.error(f"Error in search_by_tag: {e}")
+            return create_error_response(str(e))
 
     async def handle_delete_memory(self, arguments: dict) -> List[types.TextContent]:
-        """Handler for deleting one or more memories by hash."""
-        hash_param = arguments.get("hash")
-
-        if not hash_param:
-            return [types.TextContent(type="text", text="Error: hash parameter is required")]
-
-        # Convert single hash to array for uniform processing
-        hashes = [hash_param] if isinstance(hash_param, str) else hash_param
-
+        """Delete memory by hash (single or array)."""
         try:
+            hash_param = arguments.get("hash")
+
+            if not hash_param:
+                return create_error_response("hash parameter is required")
+
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
 
-            if len(hashes) == 1:
-                # Single deletion
-                success, message = await storage.delete(hashes[0])
-                return [types.TextContent(type="text", text=message)]
-            else:
-                # Bulk deletion
+            # Handle single hash or array
+            if isinstance(hash_param, list):
                 deleted_count = 0
-                failed_count = 0
-                failed_hashes = []
-
-                for hash_val in hashes:
-                    success, message = await storage.delete(hash_val)
+                for h in hash_param:
+                    success, _ = await storage.delete(h)
                     if success:
                         deleted_count += 1
-                    else:
-                        failed_count += 1
-                        failed_hashes.append(hash_val[:12] + "...")  # Truncate for readability
 
-                result_message = f"Deleted {deleted_count} of {len(hashes)} memories"
-                if failed_count > 0:
-                    result_message += f"\nFailed to delete {failed_count}: {', '.join(failed_hashes)}"
+                response = {
+                    "success": True,
+                    "affected_count": deleted_count,
+                    "message": f"Deleted {deleted_count} of {len(hash_param)} memories"
+                }
+            else:
+                success, message = await storage.delete(hash_param)
+                response = {
+                    "success": success,
+                    "affected_count": 1 if success else 0,
+                    "message": f"Memory {hash_param} deleted" if success else f"Failed to delete {hash_param}: {message}"
+                }
 
-                return [types.TextContent(type="text", text=result_message)]
+            return create_json_response(response)
 
         except Exception as e:
-            logger.error(f"Error deleting memory: {str(e)}\n{traceback.format_exc()}")
-            return [types.TextContent(type="text", text=f"Error deleting memory: {str(e)}")]
+            logger.error(f"Error in delete_memory: {e}")
+            return create_error_response(str(e))
 
     async def handle_delete_by_tag(self, arguments: dict) -> List[types.TextContent]:
-        """Handler for deleting memories by tags with AND/OR logic."""
-        tags = arguments.get("tags", [])
-        match_all = arguments.get("match_all", False)
-
-        if not tags:
-            return [types.TextContent(type="text", text="Error: Tags array is required")]
-
-        # Convert single string to array if needed for backward compatibility
-        if isinstance(tags, str):
-            tags = [tags]
-
+        """Delete memories by tags."""
         try:
+            tags = arguments.get("tags", [])
+            match_all = arguments.get("match_all", False)
+
+            if not tags:
+                return create_error_response("tags parameter is required")
+
+            # Convert single string to array if needed for backward compatibility
+            if isinstance(tags, str):
+                tags = [tags]
+
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
-            count, message = await storage.delete_by_tag(tags, match_all=match_all)
-            return [types.TextContent(type="text", text=message)]
+
+            deleted_count, message = await storage.delete_by_tag(tags, match_all=match_all)
+
+            response = {
+                "success": True,
+                "affected_count": deleted_count,
+                "message": f"Deleted {deleted_count} memories matching tags: {tags}"
+            }
+
+            return create_json_response(response)
+
         except Exception as e:
-            logger.error(f"Error deleting by tag: {str(e)}\n{traceback.format_exc()}")
-            return [types.TextContent(type="text", text=f"Error deleting by tag: {str(e)}")]
+            logger.error(f"Error in delete_by_tag: {e}")
+            return create_error_response(str(e))
 
 
     async def handle_update_memory(self, arguments: dict) -> List[types.TextContent]:
-        """Handle unified memory update requests (content and/or metadata)."""
+        """Update memory content/tags/metadata."""
         try:
             hash_value = arguments.get("hash")
             content = arguments.get("content")
@@ -828,15 +873,15 @@ class MemoryServer:
             metadata = arguments.get("metadata")
 
             if not hash_value:
-                return [types.TextContent(type="text", text="Error: hash is required")]
+                return create_error_response("hash parameter is required")
 
             if content is None and tags is None and metadata is None:
-                return [types.TextContent(type="text", text="Error: At least one of content, tags, or metadata must be provided")]
+                return create_error_response("At least one of content, tags, or metadata must be provided")
 
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
 
-            # Call the unified update method
+            # Perform update
             success, message = await storage.update_memory(
                 hash=hash_value,
                 content=content,
@@ -845,119 +890,125 @@ class MemoryServer:
             )
 
             if success:
-                logger.info(f"Successfully updated memory {hash_value}")
-                return [types.TextContent(
-                    type="text",
-                    text=f"✅ Successfully updated memory. {message}"
-                )]
+                response = {
+                    "success": True,
+                    "affected_count": 1,
+                    "message": f"Memory {hash_value} updated successfully"
+                }
+                return create_json_response(response)
             else:
-                logger.warning(f"Failed to update memory {hash_value}: {message}")
-                return [types.TextContent(type="text", text=f"❌ Failed to update memory: {message}")]
+                return create_error_response(f"Failed to update memory: {message}")
 
         except Exception as e:
-            error_msg = f"Error updating memory: {str(e)}"
-            logger.error(f"{error_msg}\n{traceback.format_exc()}")
-            return [types.TextContent(type="text", text=error_msg)]
+            logger.error(f"Error in update_memory: {e}")
+            return create_error_response(str(e))
 
     async def handle_get_by_hash(self, arguments: dict) -> List[types.TextContent]:
-        hash_value = arguments.get("hash")
-        if not hash_value:
-            return [types.TextContent(type="text", text="Error: Hash is required")]
-
+        """Retrieve single memory by hash."""
         try:
+            hash_value = arguments.get("hash")
+
+            if not hash_value:
+                return create_error_response("hash parameter is required")
+
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
 
             memory = await storage.get_by_hash(hash_value)
 
             if not memory:
-                return [types.TextContent(type="text", text=f"No memory found with hash: {hash_value}")]
-            
-            # Format the memory information
-            memory_info = [
-                f"Content: {memory.content}",
-                f"Hash: {memory.content_hash}",
-                f"Created: {memory.created_at_iso or 'N/A'}",
-                f"Updated: {memory.updated_at_iso or 'N/A'}"
-            ]
-            
-            if memory.tags:
-                memory_info.append(f"Tags: {', '.join(memory.tags)}")
-            
-            if memory.metadata:
-                memory_info.append(f"Metadata: {json.dumps(memory.metadata, indent=2)}")
-            
-            return [types.TextContent(
-                type="text",
-                text="Memory found:\n\n" + "\n".join(memory_info)
-            )]
-            
+                return create_error_response(f"Memory not found: {hash_value}")
+
+            response = {
+                "success": True,
+                "memory": memory_to_dict(memory)
+            }
+
+            return create_json_response(response)
+
         except Exception as e:
-            return [types.TextContent(type="text", text=f"Error retrieving memory by hash: {str(e)}")]
+            logger.error(f"Error in get_by_hash: {e}")
+            return create_error_response(str(e))
 
     async def handle_search_by_content(self, arguments: dict) -> List[types.TextContent]:
-        search_text = arguments.get("search_text")
-        limit = arguments.get("limit", 10)
-        
-        if not search_text:
-            return [types.TextContent(type="text", text="Error: Search text is required")]
-        
+        """Content search with pagination support."""
         try:
+            search_text = arguments.get("search_text")
+            limit = arguments.get("limit")  # Optional - returns all if None
+            offset = arguments.get("offset", 0)
+
+            if not search_text:
+                return create_error_response("search_text parameter is required")
+
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
-            
-            memories = await storage.search_by_content(search_text, limit)
-            
-            if not memories:
-                return [types.TextContent(type="text", text=f"No memories found containing: '{search_text}'")]
-            
-            formatted_results = []
-            for i, memory in enumerate(memories):
-                memory_info = [
-                    f"Memory {i+1}:",
-                    f"Content: {memory.content}",
-                    f"Hash: {memory.content_hash}"
-                ]
-                
-                if memory.tags:
-                    memory_info.append(f"Tags: {', '.join(memory.tags)}")
-                
-                memory_info.append("---")
-                formatted_results.append("\n".join(memory_info))
-            
-            return [types.TextContent(
-                type="text",
-                text=f"Found {len(memories)} memories containing '{search_text}':\n\n" + "\n".join(formatted_results)
-            )]
-            
+
+            # Call storage with pagination
+            results, total_count = await storage.search_by_content(
+                search_text=search_text,
+                limit=limit,
+                offset=offset
+            )
+
+            # Convert to dicts
+            memories_data = [memory_to_dict(m) for m in results]
+
+            # Build pagination metadata
+            has_more = (offset + len(results)) < total_count
+            next_offset = offset + len(results) if has_more else None
+
+            response = {
+                "success": True,
+                "memories": memories_data,
+                "pagination": {
+                    "total": total_count,
+                    "limit": limit,
+                    "offset": offset,
+                    "has_more": has_more,
+                    "next_offset": next_offset
+                }
+            }
+
+            return create_json_response(response)
+
         except Exception as e:
-            return [types.TextContent(type="text", text=f"Error in content search: {str(e)}")]
+            logger.error(f"Error in search_by_content: {e}")
+            return create_error_response(str(e))
 
     async def handle_recall_memory(self, arguments: dict) -> List[types.TextContent]:
         """
-        Handle memory recall requests with natural language time expressions.
-        
+        Handle memory recall requests with natural language time expressions and pagination.
+
         This handler parses natural language time expressions from the query,
         extracts time ranges, and combines them with optional semantic search.
+
+        Args:
+            query: Search query with optional time expressions
+            limit: Maximum results to return (optional - returns all if not specified)
+            offset: Number of results to skip (optional, default 0)
+
+        Returns:
+            JSON response with memories and pagination metadata
         """
         query = arguments.get("query", "")
-        n_results = arguments.get("n_results", 5)
-        
+        limit = arguments.get("limit")  # Optional - returns all if None
+        offset = arguments.get("offset", 0)  # Default to 0
+
         if not query:
-            return [types.TextContent(type="text", text="Error: Query is required")]
-        
+            return create_error_response("Query parameter is required")
+
         try:
             # Initialize storage lazily when needed
             storage = await self._ensure_storage_initialized()
-            
+
             # Parse natural language time expressions
             cleaned_query, (start_timestamp, end_timestamp) = extract_time_expression(query)
-            
+
             # Log the parsed timestamps and clean query
             logger.info(f"Original query: {query}")
             logger.info(f"Cleaned query for semantic search: {cleaned_query}")
             logger.info(f"Parsed time range: {start_timestamp} to {end_timestamp}")
-            
+
             # Log more detailed timestamp information for debugging
             if start_timestamp is not None:
                 start_dt = datetime.fromtimestamp(start_timestamp)
@@ -965,78 +1016,53 @@ class MemoryServer:
             if end_timestamp is not None:
                 end_dt = datetime.fromtimestamp(end_timestamp)
                 logger.info(f"End timestamp: {end_timestamp} ({end_dt.strftime('%Y-%m-%d %H:%M:%S')})")
-            
+
             if start_timestamp is None and end_timestamp is None:
                 # No time expression found, try direct parsing
                 logger.info("No time expression found in query, trying direct parsing")
                 start_timestamp, end_timestamp = parse_time_expression(query)
                 logger.info(f"Direct parse result: {start_timestamp} to {end_timestamp}")
-            
-            # Format human-readable time range for response
-            time_range_str = ""
-            if start_timestamp is not None and end_timestamp is not None:
-                start_dt = datetime.fromtimestamp(start_timestamp)
-                end_dt = datetime.fromtimestamp(end_timestamp)
-                time_range_str = f" from {start_dt.strftime('%Y-%m-%d %H:%M')} to {end_dt.strftime('%Y-%m-%d %H:%M')}"
-            
+
             # Retrieve memories with timestamp filter and optional semantic search
             # If cleaned_query is empty or just whitespace after removing time expressions,
             # we should perform time-based retrieval only
             semantic_query = cleaned_query.strip() if cleaned_query.strip() else None
-            
+
             # Use the enhanced recall method from ChromaMemoryStorage that combines
             # semantic search with time filtering, or just time filtering if no semantic query
+            # Fetch a large number for filtering, then paginate
             results = await storage.recall(
                 query=semantic_query,
-                n_results=n_results,
+                n_results=10000,  # Fetch large set for time filtering
                 start_timestamp=start_timestamp,
                 end_timestamp=end_timestamp
             )
-            
-            if not results:
-                no_results_msg = f"No memories found{time_range_str}"
-                return [types.TextContent(type="text", text=no_results_msg)]
-            
-            # Format results
-            formatted_results = []
-            for i, result in enumerate(results):
-                memory_dt = result.memory.timestamp
-                
-                memory_info = [
-                    f"Memory {i+1}:",
-                ]
-                
-                # Add timestamp if available
-                if memory_dt:
-                    memory_info.append(f"Timestamp: {memory_dt.strftime('%Y-%m-%d %H:%M:%S')}")
-                
-                # Add other memory information
-                memory_info.extend([
-                    f"Content: {result.memory.content}",
-                    f"Hash: {result.memory.content_hash}"
-                ])
-                
-                # Add relevance score if available (may not be for time-only queries)
-                if hasattr(result, 'relevance_score') and result.relevance_score is not None:
-                    memory_info.append(f"Relevance Score: {result.relevance_score:.2f}")
-                
-                # Add tags if available
-                if result.memory.tags:
-                    memory_info.append(f"Tags: {', '.join(result.memory.tags)}")
-                
-                memory_info.append("---")
-                formatted_results.append("\n".join(memory_info))
-            
-            # Include time range in response if available
-            found_msg = f"Found {len(results)} memories{time_range_str}:"
-            return [types.TextContent(
-                type="text",
-                text=f"{found_msg}\n\n" + "\n".join(formatted_results)
-            )]
-            
+
+            # Note: storage.recall doesn't yet support pagination, so we apply it here
+            # TODO: Update storage.recall to support limit/offset parameters
+            total_count = len(results) if results else 0
+
+            # Apply pagination
+            if limit is not None:
+                # Paginate: skip offset, take limit
+                results = results[offset:offset + limit]
+            elif offset > 0:
+                # Only offset specified, return all from offset onwards
+                results = results[offset:]
+            # else: return all results (no limit, no offset)
+
+            # Use helper to create paginated response
+            return create_paginated_response(
+                memories=results,
+                total_count=total_count,
+                limit=limit if limit is not None else total_count,
+                offset=offset,
+                is_query_result=True  # Results are MemoryQueryResult objects
+            )
+
         except Exception as e:
             logger.error(f"Error in recall_memory: {str(e)}\n{traceback.format_exc()}")
-            return [types.TextContent(type="text", text=f"Error recalling memories: {str(e)}")]
+            return create_error_response(str(e))
 
     async def handle_check_memory_health(self, arguments: dict) -> List[types.TextContent]:
         """Handle memory health check requests with performance metrics."""
@@ -1047,7 +1073,7 @@ class MemoryServer:
                 storage = await self._ensure_storage_initialized()
             except Exception as init_error:
                 # Storage initialization failed
-                result = {
+                health_data = {
                     "validation": {
                         "status": "unhealthy",
                         "message": f"Storage initialization failed: {str(init_error)}"
@@ -1064,12 +1090,16 @@ class MemoryServer:
                         }
                     }
                 }
-                
+
                 logger.error(f"Storage initialization failed during health check: {str(init_error)}")
-                return [types.TextContent(
-                    type="text",
-                    text=f"Database Health Check Results:\n{json.dumps(result, indent=2)}"
-                )]
+
+                response = {
+                    "success": False,
+                    "health": health_data,
+                    "error": f"Storage initialization failed: {str(init_error)}"
+                }
+
+                return create_json_response(response)
             
             # Skip db_utils completely for health check - implement directly here
             # Get storage type for backend-specific handling
@@ -1224,7 +1254,7 @@ class MemoryServer:
                     pass
             
             # Combine results with performance data
-            result = {
+            health_data = {
                 "version": __version__,
                 "validation": {
                     "status": "healthy" if is_valid else "unhealthy",
@@ -1236,19 +1266,20 @@ class MemoryServer:
                     "server": server_stats
                 }
             }
-            
-            logger.info(f"Database health result with performance data: {result}")
-            return [types.TextContent(
-                type="text",
-                text=f"Database Health Check Results:\n{json.dumps(result, indent=2)}"
-            )]
+
+            logger.info(f"Database health result with performance data: {health_data}")
+
+            response = {
+                "success": True,
+                "health": health_data
+            }
+
+            return create_json_response(response)
+
         except Exception as e:
-            logger.error(f"Error in check_database_health: {str(e)}")
+            logger.error(f"Error in check_memory_health: {e}")
             logger.error(traceback.format_exc())
-            return [types.TextContent(
-                type="text",
-                text=f"Error checking database health: {str(e)}"
-            )]
+            return create_error_response(str(e))
 
     async def handle_ingest_document(self, arguments: dict) -> List[types.TextContent]:
         """Handle document ingestion requests."""
@@ -1503,11 +1534,10 @@ class MemoryServer:
             )]
 
     async def handle_backup_memory(self, arguments: dict) -> List[types.TextContent]:
-        """Create database backup and return JSON with location and stats."""
-        logger.info("=== EXECUTING DASHBOARD_CREATE_BACKUP ===")
+        """Create memory backup with WAL checkpoint."""
+        logger.info("=== EXECUTING BACKUP_MEMORY ===")
         try:
             import os
-            import json
             from datetime import datetime
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1519,25 +1549,29 @@ class MemoryServer:
 
             if success:
                 backup_info = {
-                    "backup_name": backup_name,
-                    "backup_dir": backup_dir,
-                    "timestamp": timestamp,
-                    "backend": STORAGE_BACKEND,
-                    **info  # Includes backup_path, file_size_mb, memory_count, wal_checkpointed
+                    "backup_path": backup_dir,
+                    "backup_size_mb": info.get("file_size_mb", 0),
+                    "created_at": datetime.now().isoformat(),
+                    "wal_checkpoint_performed": info.get("wal_checkpointed", False),
+                    "memory_count": info.get("memory_count", 0),
+                    "backend": STORAGE_BACKEND
                 }
 
                 logger.info(f"Backup created successfully: {backup_dir}")
-                return [types.TextContent(
-                    type="text",
-                    text=json.dumps(backup_info, indent=2)
-                )]
+
+                response = {
+                    "success": True,
+                    "backup": backup_info
+                }
+
+                return create_json_response(response)
             else:
                 logger.error(f"Backup failed: {message}")
-                return [types.TextContent(type="text", text=f"Error creating backup: {message}")]
+                return create_error_response(f"Failed to create backup: {message}")
 
         except Exception as e:
-            logger.error(f"Error creating backup: {str(e)}")
-            return [types.TextContent(type="text", text=f"Error creating backup: {str(e)}")]
+            logger.error(f"Error in backup_memory: {e}")
+            return create_error_response(str(e))
 
 
 async def async_main():

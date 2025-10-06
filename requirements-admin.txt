@@ -1,2 +1,6 @@
 # MCP Memory Admin UI Dependencies
 streamlit>=1.31.0
+
+# HTTP client dependencies for MCP communication
+aiohttp>=3.9.0  # For async HTTP requests
+requests>=2.31.0  # Backup sync requests
