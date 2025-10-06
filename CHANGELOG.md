@@ -57,8 +57,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Error responses now: `{"success": false, "error": "message"}`
   - Consistent across all tools
 
+#### Admin UI UX Improvements
+- **Fixed** page reset when switching search modes
+  - Current page resets to 1 when changing between search types
+  - Tracks previous search mode to detect changes
+
+- **Fixed** pagination display for zero results
+  - Shows "0 / 0" instead of "1 / 0" when no results found
+  - Clearer feedback for empty search results
+
 #### Files Modified
-- `src/admin/ui.py` - Event loop handling, session management
+- `src/admin/ui.py` - Event loop handling, session management, pagination fixes
 - `src/admin/mcp_client.py` - Field mapping, session lifecycle, SSE parsing
 - `run_admin.sh` - CLI flags for server URL and auth token
 - `src/mcp_memory_service/models/memory.py` - ISO timestamp parsing, metadata extraction
