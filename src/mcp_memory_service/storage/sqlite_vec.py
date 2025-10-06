@@ -822,7 +822,62 @@ class SqliteVecMemoryStorage(MemoryStorage):
             error_msg = f"Failed to cleanup duplicates: {str(e)}"
             logger.error(error_msg)
             return 0, error_msg
-    
+
+    async def create_backup(self, backup_dir: str) -> Tuple[bool, str, dict]:
+        """
+        Create a complete backup of the database with WAL checkpoint.
+
+        Args:
+            backup_dir: Directory path where backup will be created
+
+        Returns:
+            Tuple of (success: bool, message: str, info: dict)
+            info contains: backup_path, timestamp, file_size, memory_count
+        """
+        try:
+            import shutil
+            from datetime import datetime
+            from pathlib import Path
+
+            if not self.conn:
+                return False, "Database not initialized", {}
+
+            # Create backup directory
+            os.makedirs(backup_dir, exist_ok=True)
+
+            # Checkpoint WAL to ensure all data is in main database file
+            logger.info("Performing WAL checkpoint before backup...")
+            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+
+            # Copy database file
+            db_filename = os.path.basename(self.db_path)
+            backup_path = os.path.join(backup_dir, db_filename)
+            shutil.copy2(self.db_path, backup_path)
+
+            # Get backup info
+            file_size = os.path.getsize(backup_path)
+            cursor = self.conn.execute("SELECT COUNT(*) FROM memories")
+            memory_count = cursor.fetchone()[0]
+            timestamp = datetime.now().isoformat()
+
+            info = {
+                "backup_path": backup_path,
+                "timestamp": timestamp,
+                "file_size_bytes": file_size,
+                "file_size_mb": round(file_size / (1024 * 1024), 2),
+                "memory_count": memory_count,
+                "wal_checkpointed": True
+            }
+
+            logger.info(f"Backup created successfully: {backup_path} ({info['file_size_mb']} MB, {memory_count} memories)")
+            return True, f"Backup created: {backup_path}", info
+
+        except Exception as e:
+            error_msg = f"Failed to create backup: {str(e)}"
+            logger.error(error_msg)
+            logger.error(traceback.format_exc())
+            return False, error_msg, {}
+
     async def update_memory_metadata(self, content_hash: str, updates: Dict[str, Any], preserve_timestamps: bool = True) -> Tuple[bool, str]:
         """Update memory metadata without recreating the entire memory entry."""
         try:

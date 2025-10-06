@@ -372,14 +372,24 @@ def main():
         if st.button("💾 Create Backup", use_container_width=True):
             if 'storage' in st.session_state:
                 import asyncio
-                import shutil
                 from datetime import datetime
                 try:
+                    # Use same backup path as MCP server
+                    backups_path = os.environ.get('MCP_MEMORY_BACKUPS_PATH', './data/backups')
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    backup_path = f"./data/backups/sqlite_vec_{timestamp}.db"
-                    os.makedirs(os.path.dirname(backup_path), exist_ok=True)
-                    shutil.copy2(db_path, backup_path)
-                    st.success(f"✅ Backup created: {backup_path}")
+                    backup_name = f"memory_backup_{timestamp}"
+                    backup_dir = os.path.join(backups_path, backup_name)
+
+                    # Use storage backend's backup method (includes WAL checkpoint)
+                    success, message, info = asyncio.run(
+                        st.session_state.storage.create_backup(backup_dir)
+                    )
+
+                    if success:
+                        st.success(f"✅ {message}")
+                        st.info(f"📊 {info['memory_count']} memories • {info['file_size_mb']} MB • WAL checkpointed")
+                    else:
+                        st.error(f"❌ {message}")
                 except Exception as e:
                     st.error(f"❌ Backup failed: {e}")
             else:

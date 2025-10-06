@@ -1506,45 +1506,35 @@ class MemoryServer:
         """Create database backup and return JSON with location and stats."""
         logger.info("=== EXECUTING DASHBOARD_CREATE_BACKUP ===")
         try:
-            import shutil
             import os
             import json
             from datetime import datetime
-            
+
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_name = f"memory_backup_{timestamp}"
-            backup_path = os.path.join(BACKUPS_PATH, backup_name)
-            
-            # Create backup directory
-            os.makedirs(backup_path, exist_ok=True)
-            
-            files_copied = 0
-            backend_info = {}
-            
-            # Handle SQLite-vec backend
-            if STORAGE_BACKEND == 'sqlite_vec':
-                from .config import SQLITE_VEC_PATH
-                sqlite_path = SQLITE_VEC_PATH
-                if os.path.exists(sqlite_path):
-                    # Copy SQLite database files
-                    shutil.copy2(sqlite_path, backup_path)
-                    files_copied += 1
-                    backend_info = {"backend": "sqlite_vec", "database_path": sqlite_path}
-            
-            backup_info = {
-                "backup_name": backup_name,
-                "backup_path": backup_path,
-                "timestamp": timestamp,
-                "files_copied": files_copied,
-                "backend": backend_info
-            }
-            
-            logger.info(f"Backup created successfully: {backup_path}")
-            return [types.TextContent(
-                type="text", 
-                text=json.dumps(backup_info, indent=2)
-            )]
-            
+            backup_dir = os.path.join(BACKUPS_PATH, backup_name)
+
+            # Use storage backend's backup method
+            success, message, info = await self.storage.create_backup(backup_dir)
+
+            if success:
+                backup_info = {
+                    "backup_name": backup_name,
+                    "backup_dir": backup_dir,
+                    "timestamp": timestamp,
+                    "backend": STORAGE_BACKEND,
+                    **info  # Includes backup_path, file_size_mb, memory_count, wal_checkpointed
+                }
+
+                logger.info(f"Backup created successfully: {backup_dir}")
+                return [types.TextContent(
+                    type="text",
+                    text=json.dumps(backup_info, indent=2)
+                )]
+            else:
+                logger.error(f"Backup failed: {message}")
+                return [types.TextContent(type="text", text=f"Error creating backup: {message}")]
+
         except Exception as e:
             logger.error(f"Error creating backup: {str(e)}")
             return [types.TextContent(type="text", text=f"Error creating backup: {str(e)}")]
