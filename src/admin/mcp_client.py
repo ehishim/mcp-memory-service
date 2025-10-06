@@ -36,7 +36,8 @@ class MCPHttpClient:
         if self._session is None or self._session.closed:
             headers = {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                # MCP over HTTP requires accepting both JSON and SSE
+                'Accept': 'application/json, text/event-stream'
             }
 
             # Add Authorization header if token provided
@@ -67,6 +68,14 @@ class MCPHttpClient:
             logger.error(f"Connection test failed: {e}")
             return False, f"Connection failed: {str(e)}"
 
+    def _parse_sse_response(self, sse_text: str) -> Dict[str, Any]:
+        """Parse Server-Sent Events response to extract JSON data"""
+        for line in sse_text.split('\n'):
+            if line.startswith('data: '):
+                json_str = line[6:]  # Remove 'data: ' prefix
+                return json.loads(json_str)
+        raise Exception("No data found in SSE response")
+
     async def list_tools(self) -> List[Dict[str, Any]]:
         """Get available MCP tools from server"""
         await self._ensure_session()
@@ -80,7 +89,10 @@ class MCPHttpClient:
         try:
             async with self._session.post(self.base_url, json=request) as response:
                 response.raise_for_status()
-                result = await response.json()
+
+                # MCP over HTTP uses SSE format, parse it
+                sse_text = await response.text()
+                result = self._parse_sse_response(sse_text)
 
                 if "error" in result:
                     raise Exception(f"MCP error: {result['error']}")
@@ -119,7 +131,10 @@ class MCPHttpClient:
         try:
             async with self._session.post(self.base_url, json=request) as response:
                 response.raise_for_status()
-                result = await response.json()
+
+                # MCP over HTTP uses SSE format, parse it
+                sse_text = await response.text()
+                result = self._parse_sse_response(sse_text)
 
                 if "error" in result:
                     raise Exception(f"MCP tool error: {result['error']}")
