@@ -458,7 +458,7 @@ def main():
 
         search_mode = st.radio(
             "Search Mode",
-            ["List All", "Semantic Search", "Search by Tags", "Search by Content", "Get by Hash"]
+            ["List All", "Semantic Search", "Search by Tags", "Search by Content", "Get by ID"]
         )
 
         # Reset page to 1 when search mode changes
@@ -475,9 +475,8 @@ def main():
             match_all = st.checkbox("Match ALL tags (AND logic)", value=False)
         elif search_mode == "Search by Content":
             content_input = st.text_input("Search Text", placeholder="substring search")
-            limit = st.slider("Max Results", min_value=1, max_value=100, value=10)
-        elif search_mode == "Get by Hash":
-            hash_input = st.text_input("Content Hash")
+        elif search_mode == "Get by ID":
+            id_input = st.text_input("Memory ID", placeholder="e.g., 550e8400-e29b-41d4-a716-446655440000")
 
         # Pagination controls
         st.divider()
@@ -556,14 +555,14 @@ def main():
             else:
                 st.warning("Enter search text")
 
-        elif search_mode == "Get by Hash":
-            if hash_input:
-                memory = run_async(st.session_state.client.get_by_hash(hash_input))
+        elif search_mode == "Get by ID":
+            if id_input:
+                memory = run_async(st.session_state.client.get_by_id(id_input))
                 if memory:
                     memories = [memory]
                     total_count = 1
             else:
-                st.warning("Enter content hash")
+                st.warning("Enter memory ID")
 
     except Exception as e:
         st.error(f"❌ Error fetching memories: {e}")

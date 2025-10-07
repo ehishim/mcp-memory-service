@@ -1285,3 +1285,149 @@ User confirmed: "seems to work" after testing with curl
 
 - `200adcb` - fix: recall() total_count using k=limit instead of k=4096
 
+---
+
+## 🐛 Bug #19: Admin UI "Get by ID" Still Using Hash (2025-10-07)
+
+**Session Focus:** Admin UI functionality broken after UUID migration - "Get by ID" mode still referencing content hash instead of memory ID
+
+### Issue Reported
+
+User reported: "We have a problem with admin UI. It still uses get by hash filtering and uses content hash. But we have changed it to get memory by ID."
+
+### Root Cause
+
+**Files:** `src/admin/ui.py` (lines 461, 479, 560, 565)
+
+**Problem:**
+- Admin UI search mode labeled "Get by Hash"
+- Input variable named `hash_input`
+- MCP client call: `get_by_hash(hash_input)`
+- MCP client had NO method `get_by_hash()` - it was renamed to `get_by_id()` during UUID migration
+
+**Verified MCP Client API:**
+```python
+# src/admin/mcp_client.py:274-283
+async def get_by_id(self, id: str) -> Optional[Memory]:
+    """Retrieve specific memory by ID"""
+    result = await self.call_tool('get_memory', {'id': id})
+    memories = self._parse_memories(result)
+    return memories[0] if memories else None
+```
+
+**Impact:**
+- "Get by Hash" functionality completely broken
+- Would throw `AttributeError: MCPHttpClient has no attribute 'get_by_hash'`
+- Users could not retrieve individual memories by ID
+
+### Solution
+
+**File:** `src/admin/ui.py`
+
+**Changes made:**
+
+1. **Line 461: Updated search mode label**
+```python
+# Before
+["List All", "Semantic Search", "Search by Tags", "Search by Content", "Get by Hash"]
+
+# After
+["List All", "Semantic Search", "Search by Tags", "Search by Content", "Get by ID"]
+```
+
+2. **Line 479: Updated input variable and placeholder**
+```python
+# Before
+hash_input = st.text_input("Content Hash")
+
+# After
+id_input = st.text_input("Memory ID", placeholder="e.g., 550e8400-e29b-41d4-a716-446655440000")
+```
+
+3. **Line 560: Updated MCP client method call**
+```python
+# Before
+elif search_mode == "Get by Hash":
+    if hash_input:
+        memory = run_async(st.session_state.client.get_by_hash(hash_input))
+
+# After
+elif search_mode == "Get by ID":
+    if id_input:
+        memory = run_async(st.session_state.client.get_by_id(id_input))
+```
+
+4. **Line 565: Updated warning message**
+```python
+# Before
+st.warning("Enter content hash")
+
+# After
+st.warning("Enter memory ID")
+```
+
+### MCP Client Validation
+
+Confirmed `get_by_id()` implementation in mcp_client.py:274-283:
+- ✅ Method exists and properly implemented
+- ✅ Calls `get_memory` MCP tool with `id` parameter
+- ✅ Returns parsed Memory object or None
+- ✅ Wrapper correctly translates between admin API and MCP protocol
+
+### Testing
+
+**Before fix:**
+```
+User selects "Get by Hash" → enters UUID
+→ Clicks search → AttributeError: 'MCPHttpClient' object has no attribute 'get_by_hash'
+```
+
+**After fix (expected):**
+```
+User selects "Get by ID" → enters UUID (e.g., 43422478-05d6-4967-97ae-27df08419121)
+→ Clicks search → Memory card displays with all fields
+```
+
+### Files Modified
+
+1. **src/admin/ui.py**
+   - Line 461: Search mode label "Get by Hash" → "Get by ID"
+   - Line 479: Variable rename `hash_input` → `id_input` with UUID placeholder
+   - Line 560: Method call `get_by_hash()` → `get_by_id()`
+   - Line 565: Warning message updated
+
+### Architecture Consistency
+
+This fix completes the UUID migration for admin UI:
+
+```
+Layer 1 - User Interface (ui.py):
+  "Get by ID" mode → id_input variable
+         ↓
+Layer 2 - MCP Client (mcp_client.py):
+  get_by_id(id) wrapper
+         ↓
+Layer 3 - MCP Protocol:
+  tools/call → get_memory tool with id parameter
+         ↓
+Layer 4 - Server (server.py):
+  handle_get_memory(arguments) → storage.get_by_id(id)
+         ↓
+Layer 5 - Storage (sqlite_vec.py):
+  get_by_id(id) → SELECT * FROM memories WHERE id = ?
+```
+
+All layers now consistently use UUID `id` field, not legacy `content_hash`.
+
+### Key Learnings
+
+1. **Complete migration requires UI updates** - Backend changes must propagate to all user interfaces
+2. **Variable naming matters** - `hash_input` vs `id_input` signals intent to future maintainers
+3. **User-facing labels critical** - "Get by Hash" confused users post-UUID migration
+4. **MCP client abstraction works** - get_by_id() wrapper successfully hides MCP protocol details
+5. **Placeholders improve UX** - UUID example helps users understand expected input format
+
+### Commits
+
+- `XXXXXXX` - fix: admin UI "Get by ID" functionality (hash → id migration)
+
