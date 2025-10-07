@@ -46,6 +46,6 @@ echo ""
 # Activate venv and run streamlit
 source venv-admin/bin/activate
 streamlit run src/admin/ui.py \
-  --browser.serverAddress=localhost \
+  --server.address=0.0.0.0 \
   --browser.gatherUsageStats=false \
   --server.headless=true
