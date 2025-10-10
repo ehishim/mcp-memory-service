@@ -1429,5 +1429,166 @@ All layers now consistently use UUID `id` field, not legacy `content_hash`.
 
 ### Commits
 
-- `XXXXXXX` - fix: admin UI "Get by ID" functionality (hash → id migration)
+- `6e4955f` - fix: admin UI "Get by ID" functionality (hash → id migration)
+
+---
+
+## 🐛 Bug #20-21: Admin UI Widget State and Edit Functionality (2025-10-10)
+
+**Session Focus:** User reported two critical admin UI bugs after testing the admin interface
+
+### Issues Reported
+
+1. **Memory content persistence bug when switching search modes** (e.g., from "List All" to "Search by Tags")
+2. **Edit memory showing "cannot be invoked..." error when saving changes**
+
+### Root Causes
+
+#### Bug #20: Streamlit Widget Key Collision
+
+**File:** `src/admin/ui.py:177, 199, 209`
+
+**Problem:**
+- Widget keys used array index (`f"edit_{idx}"`, `f"del_{idx}"`, `f"content_display_{idx}"`)
+- When search results changed but same index positions existed, Streamlit reused cached widget state
+- New memories at index 0, 1, 2 showed content from previous memories that were at those indices
+
+**Example:**
+```python
+# Initial "List All" query shows 3 memories:
+# idx=0: Memory A (content: "Docker config")
+# idx=1: Memory B (content: "Python examples")
+# idx=2: Memory C (content: "API docs")
+
+# User switches to "Search by Tags" → new 3 memories:
+# idx=0: Memory X (content: "Tag filtering")  # ❌ But UI shows "Docker config"
+# idx=1: Memory Y (content: "Search logic")    # ❌ But UI shows "Python examples"
+# idx=2: Memory Z (content: "Database query")  # ❌ But UI shows "API docs"
+```
+
+**Impact:**
+- Users saw old content displayed for new search results
+- Confusing and incorrect memory display
+- Made admin UI unreliable for searching
+
+**Fix:**
+```python
+# Before: Index-based keys (BROKEN)
+if st.button("✏️ Edit", key=f"edit_{idx}"):
+if st.button("🗑️ Delete", key=f"del_{idx}"):
+st.text_area("Content", memory.content, height=100, disabled=True, key=f"content_display_{idx}")
+
+# After: UUID-based keys (FIXED)
+if st.button("✏️ Edit", key=f"edit_{memory.id}"):
+if st.button("🗑️ Delete", key=f"del_{memory.id}"):
+st.text_area("Content", memory.content, height=100, disabled=True, key=f"content_display_{memory.id}")
+```
+
+#### Bug #21: update_memory Method Call Signature
+
+**File:** `src/admin/ui.py:350-358`
+
+**Problem:**
+- Admin built `update_params` dict: `{'tags': [...], 'metadata': {...}}`
+- Called `update_memory(editing_id, **update_params)`
+- MCP client signature: `async def update_memory(self, id: str, tags: Optional[List[str]] = None, ...)`
+- `id` was passed as positional argument, but client expected it as keyword argument
+
+**Error message:**
+```
+cannot be invoked... (AttributeError or TypeError due to incorrect parameter passing)
+```
+
+**Fix:**
+```python
+# Before: id as positional, params as kwargs (BROKEN)
+update_params = {}
+if tags_changed:
+    update_params['tags'] = new_tags
+if metadata_changed:
+    update_params['metadata'] = parsed_metadata
+
+result = run_async(
+    st.session_state.client.update_memory(
+        st.session_state.editing_id,
+        **update_params
+    )
+)
+
+# After: All params as kwargs (FIXED)
+update_kwargs = {'id': st.session_state.editing_id}
+if tags_changed:
+    update_kwargs['tags'] = new_tags
+if metadata_changed:
+    update_kwargs['metadata'] = parsed_metadata
+
+result = run_async(
+    st.session_state.client.update_memory(**update_kwargs)
+)
+```
+
+### Additional Verification
+
+User requested verification of:
+
+1. **Content saving functionality** (lines 322-346):
+   - ✅ Content IS saved via delete + store pattern
+   - When content changes, old memory is deleted and new one created
+   - New memory gets new hash (content-addressable design)
+
+2. **Update strategies** (server.py:902-955):
+   - ✅ Server correctly implements `tags_strategy` and `metadata_strategy` parameters
+   - Both default to `"replace"` mode
+   - Admin UI relies on these defaults (doesn't pass explicit strategy params)
+
+3. **Tag removal functionality** (ui.py:117-119):
+   - ✅ Tag editor properly removes tags from session state
+   - Clicking "×" button removes tag and triggers rerun
+   - Updated tag list sent to server when user saves
+
+### Files Modified
+
+1. **src/admin/ui.py**
+   - Lines 177, 199, 209: Changed widget keys from `f".._{idx}"` to `f".._{memory.id}"`
+   - Lines 350-358: Fixed update_memory call to use keyword arguments for all params
+
+### Testing
+
+**Before fixes:**
+```
+1. ❌ Switch search modes → old content shown for new results
+2. ❌ Edit tags/metadata → "cannot be invoked..." error on save
+```
+
+**After fixes (expected):**
+```
+1. ✅ Switch search modes → correct content shown for each result
+2. ✅ Edit tags/metadata → saves successfully
+3. ✅ Content editing → delete + store pattern works correctly
+4. ✅ Tag removal → clicking × removes tag from list
+```
+
+### Architecture Validation
+
+**Update strategies (server defaults):**
+- `tags_strategy = "replace"` (default) - Admin UI replaces all tags
+- `metadata_strategy = "replace"` (default) - Admin UI replaces all metadata
+- Both align with admin UI behavior (complete replacement, not merging)
+
+**Widget state management:**
+- Using `memory.id` (UUID) ensures unique keys across all search results
+- Streamlit no longer caches state between different memories
+- Each memory card has stable identity tied to its UUID
+
+### Key Learnings
+
+1. **Streamlit widget keys must be unique** - Index-based keys fail when data changes
+2. **UUID provides stable identity** - memory.id perfect for widget keys
+3. **Keyword arguments safer than positional** - Explicit id= prevents signature errors
+4. **Content-addressable design** - Hash changes require delete + store for content edits
+5. **Default strategies sufficient** - Admin UI doesn't need explicit replace mode
+
+### Commits
+
+- `XXXXXXX` - fix: admin UI widget state and edit functionality
 

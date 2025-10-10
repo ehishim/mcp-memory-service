@@ -174,7 +174,7 @@ def display_memory_card(memory: Memory, idx: int):
             st.markdown(f"**Created:** {format_timestamp(memory.created_at)} | **Updated:** {format_timestamp(memory.updated_at)}")
 
         with col2:
-            if st.button("✏️ Edit", key=f"edit_{idx}"):
+            if st.button("✏️ Edit", key=f"edit_{memory.id}"):
                 st.session_state.editing_id = memory.id
                 st.session_state.edit_content = memory.content
 
@@ -196,7 +196,7 @@ def display_memory_card(memory: Memory, idx: int):
                 st.session_state.edit_metadata = memory.metadata or {}
                 st.rerun()
 
-            if st.button("🗑️ Delete", key=f"del_{idx}"):
+            if st.button("🗑️ Delete", key=f"del_{memory.id}"):
                 if st.session_state.client:
                     result = run_async(st.session_state.client.delete_memory(memory.id))
                     if result.get("success"):
@@ -206,7 +206,7 @@ def display_memory_card(memory: Memory, idx: int):
                         st.error(f"❌ Error: {result.get('message', 'Unknown error')}")
 
         # Display content
-        st.text_area("Content", memory.content, height=100, disabled=True, key=f"content_display_{idx}")
+        st.text_area("Content", memory.content, height=100, disabled=True, key=f"content_display_{memory.id}")
 
         # Display tags from tags field only
         tags_list = []
@@ -347,17 +347,15 @@ def edit_memory_form():
 
             # Handle tags/metadata changes only (no content change)
             elif tags_changed or metadata_changed:
-                update_params = {}
+                # Build keyword arguments for update_memory
+                update_kwargs = {'id': st.session_state.editing_id}
                 if tags_changed:
-                    update_params['tags'] = new_tags
+                    update_kwargs['tags'] = new_tags
                 if metadata_changed:
-                    update_params['metadata'] = parsed_metadata
+                    update_kwargs['metadata'] = parsed_metadata
 
                 result = run_async(
-                    st.session_state.client.update_memory(
-                        st.session_state.editing_id,
-                        **update_params
-                    )
+                    st.session_state.client.update_memory(**update_kwargs)
                 )
                 if result.get("success"):
                     st.success(f"✅ Memory updated")
