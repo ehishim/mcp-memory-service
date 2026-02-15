@@ -1309,7 +1309,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
             if time_where:
                 base_query += f" WHERE {time_where}"
 
-            base_query += " ORDER BY created_at DESC"
+            base_query += " ORDER BY updated_at DESC"
 
             # Add LIMIT/OFFSET for pagination
             if limit is not None:
