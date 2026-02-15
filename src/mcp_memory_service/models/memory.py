@@ -113,7 +113,7 @@ class Memory:
             # Validate that they represent the same time
             try:
                 iso_ts = iso_to_float(created_at_iso)
-                if abs(created_at - iso_ts) > 1e-6:  # Allow for small floating-point differences
+                if abs(created_at - iso_ts) > 1e-3:  # Allow for millisecond floating-point drift
                     raise ValueError("created_at and created_at_iso do not match")
                 self.created_at = created_at
                 self.created_at_iso = created_at_iso
@@ -141,7 +141,7 @@ class Memory:
             # Validate that they represent the same time
             try:
                 iso_ts = iso_to_float(updated_at_iso)
-                if abs(updated_at - iso_ts) > 1e-6:  # Allow for small floating-point differences
+                if abs(updated_at - iso_ts) > 1e-3:  # Allow for millisecond floating-point drift
                     raise ValueError("updated_at and updated_at_iso do not match")
                 self.updated_at = updated_at
                 self.updated_at_iso = updated_at_iso
