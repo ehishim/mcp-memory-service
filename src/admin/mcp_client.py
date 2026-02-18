@@ -321,7 +321,8 @@ class MCPHttpClient:
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         tags_strategy: str = "replace",
-        metadata_strategy: str = "replace"
+        metadata_strategy: str = "replace",
+        preserve_updated_at: bool = False
     ) -> Dict[str, Any]:
         """Update memory content, tags, and/or metadata with configurable strategies"""
         updates = {}
@@ -336,7 +337,8 @@ class MCPHttpClient:
             'id': id,
             'updates': updates,
             'tags_strategy': tags_strategy,
-            'metadata_strategy': metadata_strategy
+            'metadata_strategy': metadata_strategy,
+            'preserve_updated_at': preserve_updated_at
         }
 
         return await self.call_tool('update_memory', args)

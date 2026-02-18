@@ -304,6 +304,9 @@ def edit_memory_form():
             st.error(f"❌ Error: {str(e)}")
             is_valid_json = False
 
+    preserve_ts = st.checkbox("Preserve updated_at timestamp", value=False, key="preserve_updated_at",
+                              help="Keep the existing updated_at instead of setting it to now")
+
     col1, col2, col3 = st.columns([1, 1, 3])
 
     with col1:
@@ -353,6 +356,8 @@ def edit_memory_form():
                     update_kwargs['tags'] = new_tags
                 if metadata_changed:
                     update_kwargs['metadata'] = parsed_metadata
+                if preserve_ts:
+                    update_kwargs['preserve_updated_at'] = True
 
                 result = run_async(
                     st.session_state.client.update_memory(**update_kwargs)
