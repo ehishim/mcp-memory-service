@@ -73,7 +73,8 @@ class MemoryStorage(ABC):
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         tags_strategy: str = "replace",
-        metadata_strategy: str = "replace"
+        metadata_strategy: str = "replace",
+        preserve_updated_at: bool = False
     ) -> Tuple[bool, str]:
         """
         Update memory content, tags, and/or metadata. ID remains stable.

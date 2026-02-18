@@ -963,7 +963,8 @@ class SqliteVecMemoryStorage(MemoryStorage):
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         tags_strategy: str = "replace",
-        metadata_strategy: str = "replace"
+        metadata_strategy: str = "replace",
+        preserve_updated_at: bool = False
     ) -> Tuple[bool, str]:
         """
         Update memory content, tags, and/or metadata with hash deduplication.
@@ -975,6 +976,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
             metadata: New metadata (optional)
             tags_strategy: "replace" or "merge"
             metadata_strategy: "replace" or "merge"
+            preserve_updated_at: If True, keep existing updated_at timestamp
 
         Returns:
             (success, message) tuple
@@ -1053,20 +1055,33 @@ class SqliteVecMemoryStorage(MemoryStorage):
             # Update database
             if updated_fields:
                 new_tags_str = ",".join(new_tags)
-                self.conn.execute('''
-                    UPDATE memories SET
-                        content = ?, hash = ?, tags = ?, metadata = ?,
-                        updated_at = ?, updated_at_iso = ?
-                    WHERE id = ?
-                ''', (
-                    new_content,
-                    new_hash,
-                    new_tags_str,
-                    json.dumps(new_metadata),
-                    time.time(),
-                    datetime.now().isoformat() + 'Z',
-                    id
-                ))
+                if preserve_updated_at:
+                    self.conn.execute('''
+                        UPDATE memories SET
+                            content = ?, hash = ?, tags = ?, metadata = ?
+                        WHERE id = ?
+                    ''', (
+                        new_content,
+                        new_hash,
+                        new_tags_str,
+                        json.dumps(new_metadata),
+                        id
+                    ))
+                else:
+                    self.conn.execute('''
+                        UPDATE memories SET
+                            content = ?, hash = ?, tags = ?, metadata = ?,
+                            updated_at = ?, updated_at_iso = ?
+                        WHERE id = ?
+                    ''', (
+                        new_content,
+                        new_hash,
+                        new_tags_str,
+                        json.dumps(new_metadata),
+                        time.time(),
+                        datetime.now().isoformat() + 'Z',
+                        id
+                    ))
                 self.conn.commit()
 
                 # Update embedding if content changed

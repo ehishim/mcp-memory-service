@@ -619,6 +619,11 @@ class MemoryServer:
                                     "enum": ["replace", "merge"],
                                     "description": "Metadata update strategy: 'replace' (default) replaces all metadata, 'merge' preserves existing fields",
                                     "default": "replace"
+                                },
+                                "preserve_updated_at": {
+                                    "type": "boolean",
+                                    "description": "If true, keep the existing updated_at timestamp instead of setting it to now. Useful for metadata-only fixes that shouldn't change temporal ordering.",
+                                    "default": False
                                 }
                             },
                             "required": ["id", "updates"]
@@ -906,6 +911,7 @@ class MemoryServer:
             updates = arguments.get("updates", {})
             tags_strategy = arguments.get("tags_strategy", "replace")
             metadata_strategy = arguments.get("metadata_strategy", "replace")
+            preserve_updated_at = arguments.get("preserve_updated_at", False)
 
             if not id_value:
                 return create_error_response("id parameter is required")
@@ -937,7 +943,8 @@ class MemoryServer:
                 tags=tags,
                 metadata=metadata,
                 tags_strategy=tags_strategy,
-                metadata_strategy=metadata_strategy
+                metadata_strategy=metadata_strategy,
+                preserve_updated_at=preserve_updated_at
             )
 
             if success:
