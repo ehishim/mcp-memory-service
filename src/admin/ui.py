@@ -447,6 +447,16 @@ def main():
                         st.success("✅ Backup created successfully")
                         if "backup" in result:
                             st.json(result["backup"])
+                            backup_path = result["backup"].get("backup_path")
+                            if backup_path and os.path.isfile(backup_path):
+                                with open(backup_path, "rb") as f:
+                                    st.download_button(
+                                        "⬇️ Download Backup",
+                                        data=f.read(),
+                                        file_name=os.path.basename(backup_path),
+                                        mime="application/x-sqlite3",
+                                        use_container_width=True
+                                    )
                     else:
                         st.error(f"❌ Backup failed: {result.get('error', 'Unknown error')}")
                 except Exception as e:

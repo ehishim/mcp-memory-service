@@ -1602,7 +1602,7 @@ class MemoryServer:
 
             if success:
                 backup_info = {
-                    "backup_path": backup_dir,
+                    "backup_path": info.get("backup_path", backup_dir),
                     "backup_size_mb": info.get("file_size_mb", 0),
                     "created_at": datetime.now().isoformat(),
                     "wal_checkpoint_performed": info.get("wal_checkpointed", False),
