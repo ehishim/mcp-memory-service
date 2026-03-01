@@ -448,6 +448,7 @@ def main():
                         if "backup" in result:
                             st.json(result["backup"])
                             backup_path = result["backup"].get("backup_path")
+                            st.write(f"DEBUG: backup_path={backup_path}, isfile={os.path.isfile(backup_path) if backup_path else 'N/A'}")
                             if backup_path and os.path.isfile(backup_path):
                                 with open(backup_path, "rb") as f:
                                     st.download_button(
