@@ -1238,7 +1238,11 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     query_embedding = self._generate_embedding(query)
 
                     # Cap k value at 4096 (sqlite-vec limit)
-                    k_value = min(4096, (limit or 100) + offset) if limit is not None else 4096
+                    # When tag filtering is active, use max k so tag filter has full candidate set
+                    if tags:
+                        k_value = 4096
+                    else:
+                        k_value = min(4096, (limit or 100) + offset) if limit is not None else 4096
 
                     # First, get total count of matching results (always use k=4096 for accurate count)
                     count_query = '''
