@@ -1166,17 +1166,21 @@ class SqliteVecMemoryStorage(MemoryStorage):
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         start_timestamp: Optional[float] = None,
-        end_timestamp: Optional[float] = None
+        end_timestamp: Optional[float] = None,
+        tags: Optional[List[str]] = None,
+        match_all: bool = True
     ) -> Tuple[List[MemoryQueryResult], int]:
         """
-        Retrieve memories with combined time filtering and optional semantic search.
+        Retrieve memories with combined time filtering, tag filtering, and optional semantic search.
 
         Args:
-            query: Optional semantic search query. If None, only time filtering is applied.
+            query: Optional semantic search query. If None, only time/tag filtering is applied.
             limit: Maximum results to return (None = return all, capped at 4096 for semantic search).
             offset: Number of results to skip for pagination (default 0).
             start_timestamp: Optional start time for filtering.
             end_timestamp: Optional end time for filtering.
+            tags: Optional list of tags to filter by.
+            match_all: If True, all tags must match (AND). If False, any tag matches (OR).
 
         Returns:
             Tuple of (results, total_count) where total_count is actual matches in database.
@@ -1204,7 +1208,27 @@ class SqliteVecMemoryStorage(MemoryStorage):
 
             time_where = " AND ".join(time_conditions) if time_conditions else ""
 
-            logger.info(f"Time filtering conditions: {time_where}, limit: {limit}, offset: {offset}")
+            # Build tag filtering conditions
+            tag_conditions = []
+            tag_params = []
+            if tags:
+                joiner = " AND " if match_all else " OR "
+                tag_conditions_str = joiner.join(["m.tags LIKE ?" for _ in tags])
+                tag_conditions = [f"({tag_conditions_str})"]
+                tag_params = [f"%{tag}%" for tag in tags]
+
+            # Combine all WHERE conditions
+            all_conditions = []
+            all_extra_params = []
+            if time_where:
+                all_conditions.append(time_where)
+                all_extra_params.extend(params)
+            if tag_conditions:
+                all_conditions.extend(tag_conditions)
+                all_extra_params.extend(tag_params)
+            combined_where = " AND ".join(all_conditions) if all_conditions else ""
+
+            logger.info(f"Filtering conditions: time={time_where}, tags={tags}, match_all={match_all}, limit={limit}, offset={offset}")
             
             # Determine whether to use semantic search or just time-based filtering
             if query and self.embedding_model:
@@ -1225,13 +1249,13 @@ class SqliteVecMemoryStorage(MemoryStorage):
                             WHERE content_embedding MATCH ? AND k = 4096
                         ) e ON m.rowid = e.rowid
                     '''
-                    if time_where:
-                        count_query += f" WHERE {time_where}"
+                    if combined_where:
+                        count_query += f" WHERE {combined_where}"
 
-                    count_params = [serialize_float32(query_embedding)] + params
+                    count_params = [serialize_float32(query_embedding)] + all_extra_params
                     total_count = self.conn.execute(count_query, count_params).fetchone()[0]
 
-                    # Build SQL query with time filtering and pagination
+                    # Build SQL query with time/tag filtering and pagination
                     base_query = '''
                         SELECT m.id, m.hash, m.content, m.tags, m.metadata,
                                m.created_at, m.updated_at, m.created_at_iso, m.updated_at_iso,
@@ -1245,17 +1269,17 @@ class SqliteVecMemoryStorage(MemoryStorage):
                         ) e ON m.rowid = e.rowid
                     '''
 
-                    if time_where:
-                        base_query += f" WHERE {time_where}"
+                    if combined_where:
+                        base_query += f" WHERE {combined_where}"
 
                     base_query += " ORDER BY e.distance, m.created_at DESC"
 
                     # Add LIMIT/OFFSET for pagination
                     if limit is not None:
                         base_query += " LIMIT ? OFFSET ?"
-                        query_params = [serialize_float32(query_embedding), k_value] + params + [limit, offset]
+                        query_params = [serialize_float32(query_embedding), k_value] + all_extra_params + [limit, offset]
                     else:
-                        query_params = [serialize_float32(query_embedding), k_value] + params
+                        query_params = [serialize_float32(query_embedding), k_value] + all_extra_params
 
                     cursor = self.conn.execute(base_query, query_params)
 
@@ -1291,7 +1315,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
                             results.append(MemoryQueryResult(
                                 memory=memory,
                                 relevance_score=relevance_score,
-                                debug_info={"distance": distance, "backend": "sqlite-vec", "time_filtered": bool(time_where)}
+                                debug_info={"distance": distance, "backend": "sqlite-vec", "time_filtered": bool(time_where), "tag_filtered": bool(tags)}
                             ))
                             
                         except Exception as parse_error:
@@ -1306,13 +1330,26 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     # Fall back to time-based retrieval on error
                     logger.info("Falling back to time-based retrieval")
             
-            # Time-based filtering only (or fallback from failed semantic search)
+            # Time/tag filtering only (or fallback from failed semantic search)
+            # Build conditions without table alias (no JOIN in this path)
+            noalias_conditions = []
+            noalias_params = []
+            if time_where:
+                noalias_conditions.append(time_where)
+                noalias_params.extend(params)
+            if tags:
+                joiner = " AND " if match_all else " OR "
+                tag_cond = joiner.join(["tags LIKE ?" for _ in tags])
+                noalias_conditions.append(f"({tag_cond})")
+                noalias_params.extend([f"%{tag}%" for tag in tags])
+            noalias_where = " AND ".join(noalias_conditions) if noalias_conditions else ""
+
             # First get total count
             count_query = "SELECT COUNT(*) FROM memories"
-            if time_where:
-                count_query += f" WHERE {time_where}"
+            if noalias_where:
+                count_query += f" WHERE {noalias_where}"
 
-            total_count = self.conn.execute(count_query, params).fetchone()[0]
+            total_count = self.conn.execute(count_query, noalias_params).fetchone()[0]
 
             # Build main query with pagination
             base_query = '''
@@ -1321,18 +1358,18 @@ class SqliteVecMemoryStorage(MemoryStorage):
                 FROM memories
             '''
 
-            if time_where:
-                base_query += f" WHERE {time_where}"
+            if noalias_where:
+                base_query += f" WHERE {noalias_where}"
 
             base_query += " ORDER BY updated_at DESC"
 
             # Add LIMIT/OFFSET for pagination
             if limit is not None:
                 base_query += " LIMIT ? OFFSET ?"
-                query_params = params + [limit, offset]
+                query_params = noalias_params + [limit, offset]
             else:
                 # No limit = return all (for wildcard "*")
-                query_params = params
+                query_params = noalias_params
 
             cursor = self.conn.execute(base_query, query_params)
 
@@ -1362,7 +1399,7 @@ class SqliteVecMemoryStorage(MemoryStorage):
                     results.append(MemoryQueryResult(
                         memory=memory,
                         relevance_score=None,
-                        debug_info={"backend": "sqlite-vec", "time_filtered": bool(time_where), "query_type": "time_based"}
+                        debug_info={"backend": "sqlite-vec", "time_filtered": bool(time_where), "tag_filtered": bool(tags), "query_type": "time_based"}
                     ))
                     
                 except Exception as parse_error:

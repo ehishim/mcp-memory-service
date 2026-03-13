@@ -120,6 +120,20 @@ class MemoryStorage(ABC):
         # Default implementation just uses regular search
         results = await self.retrieve(query, n_results)
         return [r.memory for r in results]
+
+    async def recall(
+        self,
+        query: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        start_timestamp: Optional[float] = None,
+        end_timestamp: Optional[float] = None,
+        tags: Optional[List[str]] = None,
+        match_all: bool = True
+    ) -> Tuple[List['MemoryQueryResult'], int]:
+        """Retrieve memories with combined semantic search, time filtering, and tag filtering.
+        Override for specific implementations."""
+        return [], 0
     
     async def search(self, query: str, n_results: int = 5) -> List[MemoryQueryResult]:
         """Search memories. Default implementation uses retrieve."""

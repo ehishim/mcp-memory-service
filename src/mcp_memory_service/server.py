@@ -462,13 +462,23 @@ class MemoryServer:
                     ),
                     types.Tool(
                         name="recall_memory",
-                        description="Semantic search with natural language time filtering and pagination. Returns memories ranked by relevance_score (0.0-1.0, higher is more relevant).",
+                        description="Semantic search with natural language time filtering, optional tag filtering, and pagination. Returns memories ranked by relevance_score (0.0-1.0, higher is more relevant). Use tags to narrow results to specific projects, types, or categories.",
                         inputSchema={
                             "type": "object",
                             "properties": {
                                 "query": {
                                     "type": "string",
                                     "description": "Supports time expressions (yesterday, last week, Jan 2024)"
+                                },
+                                "tags": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "Optional list of tags to filter results (e.g. [\"PROJECT:my-app\", \"TYPE:architecture\"])"
+                                },
+                                "match_all_tags": {
+                                    "type": "boolean",
+                                    "description": "If true, match all tags (AND). If false, match any tag (OR). Default true.",
+                                    "default": True
                                 },
                                 "limit": {
                                     "type": "integer",
@@ -1051,6 +1061,8 @@ class MemoryServer:
         query = arguments.get("query", "")
         limit = arguments.get("limit")  # Optional - defaults to 100 if None
         offset = arguments.get("offset", 0)  # Default to 0
+        tags = arguments.get("tags")  # Optional tag filter
+        match_all = arguments.get("match_all_tags", True)  # Default AND logic
 
         if not query:
             return create_error_response("Query parameter is required")
@@ -1097,7 +1109,9 @@ class MemoryServer:
                 limit=limit,
                 offset=offset,
                 start_timestamp=start_timestamp,
-                end_timestamp=end_timestamp
+                end_timestamp=end_timestamp,
+                tags=tags,
+                match_all=match_all
             )
 
             # Use helper to create paginated response
